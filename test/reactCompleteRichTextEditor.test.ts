@@ -1762,6 +1762,65 @@ it('normalizes bare stored checkbox syntax only through the real Markdown paste 
     assert.deepEqual(writes, ['[x] Complete\n[ ] Pending\n\n\n']);
 });
 
+for (const { name, text, code } of [
+    {
+        name: 'backticks',
+        text: '[X] Complete\n\n```js\n[_] = items;\n```',
+        code: '[_] = items;',
+    },
+    {
+        name: 'tilde fences with CRLF and a shorter marker inside',
+        text: '~~~~js\r\n~~~\r\n[_] = items;\r\n~~~~~\r\n\r\n[X] Complete',
+        code: '~~~\n[_] = items;',
+    },
+]) {
+    it(`keeps pasted code literal through the Markdown value echo with ${name}`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        const render = (value: string) =>
+            f.render(
+                h(CompleteRichTextEditor, {
+                    ref,
+                    value,
+                    onValueChange: (stored) => writes.push(stored),
+                })
+            );
+        const assertContent = async () => {
+            const { view } = await f.editor(ref);
+            const checkboxes = view.dom.querySelectorAll<HTMLInputElement>(
+                'input[type="checkbox"]'
+            );
+            assert.equal(checkboxes.length, 1);
+            assert.equal(checkboxes[0]?.checked, true);
+            assert.match(view.dom.textContent ?? '', /Complete/);
+            const codeBlocks: string[] = [];
+            view.state.doc.descendants((node) => {
+                if (node.type.name === 'code_block')
+                    codeBlocks.push(node.textContent);
+            });
+            assert.deepEqual(codeBlocks, [code]);
+        };
+
+        await render('');
+        const { view } = await f.editor(ref);
+        await f.select(view, 1);
+        const event = await f.paste(view, {
+            'text/plain': text,
+            'vscode-editor-data': JSON.stringify({ mode: 'markdown' }),
+        });
+        assert.equal(event.defaultPrevented, true);
+        assert.equal(writes.length, 1);
+        assert(writes[0]?.includes('[x] Complete'));
+        assert(writes[0]?.includes(code));
+        await assertContent();
+
+        await render(writes[0]!);
+        await assertContent();
+        assert.equal(writes.length, 1);
+    });
+}
+
 it('refuses a captured paste handler after its document owner retires', async (t) => {
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();

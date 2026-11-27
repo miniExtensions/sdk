@@ -4,6 +4,7 @@ import {
     PluginKey,
     toggleMark,
     isInTable,
+    type Editor,
     type EditorState,
     isMarkdown,
     isUrl,
@@ -32,11 +33,24 @@ type MarkdownPasteDecisionInput = {
     hasProsemirrorSlice: boolean;
 };
 
+type MarkdownFenceTokenizer = {
+    parse(
+        text: string,
+        environment: Record<string, unknown>
+    ): readonly {
+        type: string;
+        map: readonly [number, number] | null;
+    }[];
+};
+type MarkdownPasteParser = Editor['pasteParser'] & {
+    tokenizer: MarkdownFenceTokenizer;
+};
+
 type EmbedCommands = {
     embed(attributes: { href: string }): unknown;
 };
 
-const normalizePastedMarkdown = (text: string): string => {
+const normalizeBareTaskMarkers = (text: string): string => {
     const CHECKBOX_REGEX = /^\s?(\[(X|\s|_|-)\]\s(.*)?)/gim;
     let normalizedText = text;
 
@@ -49,6 +63,40 @@ const normalizePastedMarkdown = (text: string): string => {
 
     return normalizedText;
 };
+
+function normalizePastedMarkdown(
+    text: string,
+    tokenizer: MarkdownFenceTokenizer
+): string {
+    if (!text.includes('[') || (!text.includes('```') && !text.includes('~~~')))
+        return normalizeBareTaskMarkers(text);
+
+    const lineBreaks = Array.from(text.matchAll(/\r\n?|\n/g));
+    const parts: string[] = [];
+    let cursor = 0;
+    for (const token of tokenizer.parse(text, {})) {
+        if (token.type !== 'fence' || token.map == null) continue;
+        const [startLine, endLine] = token.map;
+        // Keep the preceding line break with the fence. The legacy task
+        // rewrite can otherwise trim it away after a bare marker.
+        const fenceStart = Math.max(
+            cursor,
+            lineBreaks[startLine - 1]?.index ?? 0
+        );
+        const lastBreak = lineBreaks[endLine - 1];
+        const fenceEnd =
+            lastBreak == null
+                ? text.length
+                : lastBreak.index + lastBreak[0].length;
+        parts.push(
+            normalizeBareTaskMarkers(text.slice(cursor, fenceStart)),
+            text.slice(fenceStart, fenceEnd)
+        );
+        cursor = fenceEnd;
+    }
+    parts.push(normalizeBareTaskMarkers(text.slice(cursor)));
+    return parts.join('');
+}
 
 const isUnknownRecord = (value: unknown): value is UnknownRecord =>
     typeof value === 'object' && value != null;
@@ -239,8 +287,12 @@ export class GeneralPasteHandlerExtension extends Extension {
                         ) {
                             event.preventDefault();
 
-                            const paste = this.editor.pasteParser.parse(
-                                normalizePastedMarkdown(text)
+                            // The pinned editor creates a ProseMirror
+                            // MarkdownParser; use its own fence line ranges.
+                            const parser = this.editor
+                                .pasteParser as MarkdownPasteParser;
+                            const paste = parser.parse(
+                                normalizePastedMarkdown(text, parser.tokenizer)
                             );
                             if (paste == null) return true;
                             const slice = paste.slice(0);

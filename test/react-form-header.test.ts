@@ -125,6 +125,26 @@ it('distinguishes missing, valid blank and restored dynamic titles in one mounte
     }
 });
 
+it('distinguishes a blank Rating title source from an explicit zero', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const rating: AirtableField = {
+        id: 'fld_rating_title',
+        name: 'Rating title',
+        config: { type: AirtableFieldType.RATING },
+    };
+    const headings: (string | null)[] = [];
+    for (const title of [
+        ...[3, undefined, null, 0, 2].map((value) =>
+            dynamicSource(value, rating)
+        ),
+        missing,
+    ]) {
+        await f.render(h(CompleteFormHeader, { ...defaults, title }));
+        headings.push(f.container.querySelector('h1')?.textContent ?? null);
+    }
+    assert.deepEqual(headings, ['3', null, null, '0', '2', 'Extension name']);
+});
+
 it('preserves selected source and config A–B–A without retaining obsolete content', async (t) => {
     const f = await htmlPresentationFixture(t);
     for (const [configuration, title, description, expected] of [

@@ -169,7 +169,7 @@ try{
 }
 `;
 
-const testsPerProfile = 32;
+const testsPerProfile = 34;
 const hydrationChecksPerProfile = 13;
 
 /** Qualify public installed bytes; do not count local source execution as a package proof. */

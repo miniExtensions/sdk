@@ -987,37 +987,52 @@ export async function assertPortalShellNavigationConsumer({
         await click(named('Done orders'));
         assert.equal(ordinary.length, 1);
         assert.equal(ordinary[0].type, 'navigate');
+        const matchingEmbed = {
+            type: 'embedded',
+            id: captured.itemId,
+            label: 'Handbook',
+            url: captured.url,
+        };
+        const withGuide = (replacement) =>
+            fullItems.map((item) =>
+                item.id === captured.itemId ? replacement : item
+            );
         snapshot = {
             ...snapshot,
             revision: snapshot.revision + 1,
-            selection: {
-                type: 'embedded',
-                itemId: 'guide',
-                url: 'https://example.invalid/captured',
-            },
+            items: withGuide(matchingEmbed),
+            selection: captured,
         };
         await render();
         const frame = container.querySelector('iframe');
         assert(frame);
+        assert.equal(frame.title, matchingEmbed.label);
         assert.equal(frame.getAttribute('referrerpolicy'), null);
         assert.equal(frame.getAttribute('allow'), null);
-        for (const items of [
-            fullItems.map((item) =>
-                item.id === 'guide'
-                    ? {
-                          type: 'external',
-                          id: 'guide',
-                          label: 'Current external',
-                          url: 'https://example.invalid/current',
-                      }
-                    : item
-            ),
-            fullItems.filter((item) => item.id !== 'guide'),
+        for (const [items, expectedTitle] of [
+            [
+                withGuide({ ...matchingEmbed, label: 'Renamed handbook' }),
+                'Renamed handbook',
+            ],
+            [
+                withGuide({
+                    ...matchingEmbed,
+                    type: 'external',
+                    label: 'Pay invoices',
+                }),
+                snapshot.header.title,
+            ],
+            [fullItems, snapshot.header.title],
+            [
+                fullItems.filter((item) => item.id !== captured.itemId),
+                snapshot.header.title,
+            ],
         ]) {
             snapshot = { ...snapshot, revision: snapshot.revision + 1, items };
             await render();
             assert.equal(container.querySelector('iframe'), frame);
             assert.equal(frame.getAttribute('src'), captured.url);
+            assert.equal(frame.title, expectedTitle);
             assert.equal(activations.length, 6);
             assert.equal(ordinary.length, 1);
         }

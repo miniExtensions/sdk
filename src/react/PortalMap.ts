@@ -415,6 +415,7 @@ export function PortalMap(props: PortalMapProps): ReactElement {
                                 content: h(
                                     'div',
                                     {
+                                        className: 'mx-sdk-portal-map-marker',
                                         ref: (
                                             element: HTMLDivElement | null
                                         ) => {

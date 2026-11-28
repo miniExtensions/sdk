@@ -1,6 +1,7 @@
 import type * as React from 'react';
 import { createElement, useMemo, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
+import markdownIt from 'markdown-it';
 import {
     Editor,
     Extension,
@@ -9,6 +10,7 @@ import {
     TextSelection,
     theme,
 } from '../../vendor/rich-markdown-editor/sdk-runtime.js';
+import { serializeEditorRichText } from '../forms/richTextSerialization.js';
 import { GeneralPasteHandlerExtension } from './completeRichTextPaste.js';
 import type {
     NativeRichTextEditorHandle,
@@ -20,6 +22,43 @@ const inheritedTheme = {
     text: 'inherit',
     background: 'inherit',
     link: 'inherit',
+};
+
+const markdownTokenizer = markdownIt();
+
+function convertRichTextEditorValue(value: string): string {
+    if (!value.includes('\n\\\n') || !/```|~~~/.test(value))
+        return serializeEditorRichText(value);
+
+    const lineStarts = [0];
+    for (const match of value.matchAll(/\r\n?|\n/g))
+        lineStarts.push(match.index + match[0].length);
+    const codeBackslashes = new Set<number>();
+    for (const token of markdownTokenizer.parse(value, {})) {
+        if (token.type !== 'fence' || token.map == null) continue;
+        const [start, end] = token.map;
+        for (let line = start + 1; line < end; line++) {
+            const offset = lineStarts[line];
+            if (value[offset] === '\\') codeBackslashes.add(offset);
+        }
+    }
+    // A blank paragraph and a literal backslash in a code fence serialize to
+    // the same sequence. Only the paragraph is an editor artifact.
+    return serializeEditorRichText(value, (offset) =>
+        codeBackslashes.has(offset)
+    );
+}
+
+export const richTextEditorSerialization = {
+    convert: convertRichTextEditorValue,
+    normalize(value: string | null | undefined): string {
+        return value == null
+            ? ''
+            : convertRichTextEditorValue(value.replace(/\r\n/g, '\n')).replace(
+                  /\n+$/g,
+                  ''
+              );
+    },
 };
 
 type PortalOwner = {

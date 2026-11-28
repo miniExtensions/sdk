@@ -12,9 +12,18 @@ export type ParsedRichTextCheckbox = {
 
 /** Preserve stored bytes except the existing editor sentinel, hard-break and checkbox artifacts. */
 export function convertEditorValueToStoredRichText(value: string): string {
+    return serializeEditorRichText(value);
+}
+
+export function serializeEditorRichText(
+    value: string,
+    preserveBackslashAt?: (offset: number) => boolean
+): string {
     if (value === '\\\n') return '';
     return value
-        .replace(/\n\\\n/g, '\n\n')
+        .replace(/\n\\\n/g, (match: string, offset: number) =>
+            preserveBackslashAt?.(offset + 1) ? match : '\n\n'
+        )
         .replace(
             /^- \[(\s|x)\]/gm,
             (_, content: string) => `[${content === 'x' ? 'x' : ' '}]`

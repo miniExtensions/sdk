@@ -13,6 +13,7 @@ test('native editor empty sentinel and hard breaks use exact stored bytes', () =
         ['\\\n', ''],
         ['line 1\n\\\nline 2', 'line 1\n\nline 2'],
         ['line 1\\\nline 2', 'line 1\\\nline 2'],
+        ['```\nalpha\n\\\nomega\n```', '```\nalpha\n\nomega\n```'],
         [' content  \n', ' content  \n'],
     ])
         assert.equal(convertEditorValueToStoredRichText(input), expected);

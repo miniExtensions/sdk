@@ -95,7 +95,11 @@ export const Item = React.memo(
                     className: 'mx-sdk-kanban-draggable',
                     style,
                     'data-kanban-record': String(value),
-                    tabIndex: !handle ? 0 : undefined,
+                    tabIndex: handle
+                        ? undefined
+                        : listeners?.onKeyDown
+                          ? 0
+                          : -1,
                 },
                 renderItem(value, {
                     interactive: !dragOverlay && interactive !== false,

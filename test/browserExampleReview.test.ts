@@ -542,6 +542,76 @@ describe('actual starter manual multipage navigation', () => {
         assert.equal(fixture.loads(), 1);
     });
 
+    it('names the visible question when a required answer blocks Next', async (test) => {
+        const form = navigationForm();
+        const billing = form.payload.fieldIdsToSchemas.fld_title;
+        const details = form.payload.fieldIdsToSchemas.fld_details;
+        assert.ok(billing?.fieldType === 'singleLineText');
+        assert.ok(details?.fieldType === 'singleLineText');
+        const shipping = structuredClone(billing);
+        billing.airtableField.name = 'Shipping contact';
+        billing.miniExtConfig = {
+            ...billing.miniExtConfig,
+            title: 'Billing contact',
+        };
+        shipping.airtableField.id = 'fld_shipping';
+        shipping.airtableField.name = 'Billing contact';
+        shipping.miniExtConfig = {
+            ...shipping.miniExtConfig,
+            title: 'Shipping contact',
+        };
+        details.airtableField.name = 'Delivery details';
+        details.miniExtConfig = { ...details.miniExtConfig, title: '   ' };
+        form.payload.fieldIdsToSchemas.fld_shipping = shipping;
+        form.payload.fieldIdsInForm.splice(1, 0, 'fld_shipping');
+        form.payload.formRecord.data.fld_title = null;
+        form.payload.formRecord.data.fld_shipping = null;
+        form.payload.formRecord.data.fld_details = null;
+
+        const fixture = await mount(test, form);
+        const document = fixture.window.document;
+        const pageTitle = () =>
+            document.querySelector('[aria-label="Form pages"] h3')?.textContent;
+        const problems = () =>
+            Array.from(
+                document.querySelectorAll(
+                    '[aria-label="Form pages"] [role="status"] li'
+                ),
+                (node) => node.textContent
+            );
+        assert.equal(
+            fixture.field('fld_title').closest('label')?.textContent,
+            'Billing contact'
+        );
+        assert.equal(
+            fixture.field('fld_shipping').closest('label')?.textContent,
+            'Shipping contact'
+        );
+        const firstPage = pageTitle();
+        fixture.edit('fld_title', 'Billing draft');
+        fixture.button('Next').click();
+        await settled();
+        assert.deepEqual(problems(), ['Shipping contact: required.']);
+        assert.equal(pageTitle(), firstPage);
+        assert.equal(fixture.saves.length, 0);
+
+        fixture.edit('fld_shipping', 'Shipping draft');
+        await settled();
+        assert.deepEqual(problems(), []);
+        fixture.button('Next').click();
+        await settled();
+        assert.equal(pageTitle(), 'Details');
+        assert.equal(fixture.field('fld_title').value, 'Billing draft');
+        assert.equal(fixture.field('fld_shipping').value, 'Shipping draft');
+
+        fixture.button('Next').click();
+        await settled();
+        assert.deepEqual(problems(), ['Delivery details: required.']);
+        assert.equal(pageTitle(), 'Details');
+        assert.equal(fixture.loads(), 1);
+        assert.equal(fixture.saves.length, 0);
+    });
+
     it('skips a conditionally hidden page while preserving its native answer in final Save', async (test) => {
         const form = navigationForm();
         const details = form.payload.fieldIdsToSchemas.fld_details;

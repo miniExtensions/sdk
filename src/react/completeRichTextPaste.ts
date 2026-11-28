@@ -32,19 +32,21 @@ type MarkdownPasteDecisionInput = {
     html: string;
     pasteCodeLanguage?: string;
     hasProsemirrorSlice: boolean;
+    tokenizer: MarkdownPasteTokenizer;
 };
 
-type MarkdownFenceTokenizer = {
+type MarkdownPasteTokenizer = {
     parse(
         text: string,
         environment: Record<string, unknown>
     ): readonly {
         type: string;
+        level: number;
         map: readonly [number, number] | null;
     }[];
 };
 type MarkdownPasteParser = Editor['pasteParser'] & {
-    tokenizer: MarkdownFenceTokenizer;
+    tokenizer: MarkdownPasteTokenizer;
 };
 
 type EmbedCommands = {
@@ -67,7 +69,7 @@ const normalizeBareTaskMarkers = (text: string): string => {
 
 function normalizePastedMarkdown(
     text: string,
-    tokenizer: MarkdownFenceTokenizer
+    tokenizer: MarkdownPasteTokenizer
 ): string {
     if (!text.includes('[') || (!text.includes('```') && !text.includes('~~~')))
         return normalizeBareTaskMarkers(text);
@@ -138,11 +140,35 @@ const hasProsemirrorSliceInClipboard = (event: ClipboardEvent): boolean => {
     return types.includes(PROSEMIRROR_SLICE_MIME_TYPE);
 };
 
+function startsWithOrderedList(
+    text: string,
+    tokenizer: MarkdownPasteTokenizer
+): boolean {
+    // Skip tokenization for ordinary prose. The parser decides which lines
+    // belong to the list, including continuation lines and nested items.
+    if (!/^(?:[ \t]*(?:\r\n?|\n))* {0,3}\d{1,9}[.)][ \t]/.test(text))
+        return false;
+    const tokens = tokenizer.parse(text, {});
+    if (tokens[0]?.type !== 'ordered_list_open') return false;
+    const end = tokens.findIndex(
+        (token) => token.level === 0 && token.type === 'ordered_list_close'
+    );
+    return (
+        end !== -1 &&
+        tokens
+            .slice(1, end)
+            .filter(
+                (token) => token.level === 1 && token.type === 'list_item_open'
+            ).length >= 2
+    );
+}
+
 export const shouldParsePlainTextAsMarkdown = ({
     text,
     html,
     pasteCodeLanguage,
     hasProsemirrorSlice,
+    tokenizer,
 }: MarkdownPasteDecisionInput): boolean => {
     if (hasProsemirrorSlice || html.includes(PROSEMIRROR_HTML_MARKER)) {
         return false;
@@ -153,7 +179,9 @@ export const shouldParsePlainTextAsMarkdown = ({
     }
 
     const hasHtml = html.trim().length > 0;
-    return !hasHtml && isMarkdown(text);
+    return (
+        !hasHtml && (isMarkdown(text) || startsWithOrderedList(text, tokenizer))
+    );
 };
 
 export class GeneralPasteHandlerExtension extends Extension {
@@ -354,20 +382,21 @@ export class GeneralPasteHandlerExtension extends Extension {
                             return true;
                         }
 
+                        const parser = this.editor
+                            .pasteParser as MarkdownPasteParser;
                         if (
                             shouldParsePlainTextAsMarkdown({
                                 text,
                                 html,
                                 pasteCodeLanguage,
                                 hasProsemirrorSlice,
+                                tokenizer: parser.tokenizer,
                             })
                         ) {
                             event.preventDefault();
 
                             // The pinned editor creates a ProseMirror
                             // MarkdownParser; use its own fence line ranges.
-                            const parser = this.editor
-                                .pasteParser as MarkdownPasteParser;
                             const paste = parser.parse(
                                 normalizePastedMarkdown(text, parser.tokenizer)
                             );

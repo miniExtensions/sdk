@@ -1388,6 +1388,79 @@ it('parses recognized plain Markdown into actual heading and strong nodes with e
     assert.equal(ref.current, editor);
 });
 
+for (const start of [8, 10]) {
+    it(`preserves a plain-text ordered list starting at ${start} through draft reload`, async (t) => {
+        const f = await completeRichTextFixture(t);
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        const text = `${start}. Inspect\n${start + 1}. Publish`;
+        await f.render(h(ControlledCompleteEditor, { editorRef: ref, writes }));
+        const { view } = await f.editor(ref);
+        await f.select(view, 1);
+        const browserWindow: Window = f.window;
+        const event = new browserWindow.Event('paste', { cancelable: true });
+        Object.defineProperty(event, 'clipboardData', {
+            value: {
+                types: ['text/plain'],
+                files: [],
+                items: [],
+                getData: (type: string) => (type === 'text/plain' ? text : ''),
+            },
+        });
+        await act(async () => {
+            assert.equal(
+                view.pasteText(text, event as unknown as ClipboardEvent),
+                true
+            );
+        });
+        const assertList = (element: HTMLElement) => {
+            const list = element.querySelector('ol');
+            assert.ok(list, 'Pasted text should render an ordered list');
+            assert.equal(list.getAttribute('start'), String(start));
+            assert.deepEqual(
+                Array.from(list.children, (item) => item.textContent),
+                ['Inspect', 'Publish']
+            );
+        };
+        assertList(view.dom);
+        assert.equal(writes.length, 1);
+        const stored = writes[0];
+        assert.equal(stored?.trim(), text);
+        await f.render(
+            h(ControlledCompleteEditor, {
+                key: 'reload',
+                editorRef: ref,
+                writes,
+                initial: stored,
+            })
+        );
+        const reloaded = (await f.editor(ref)).view;
+        assert.notEqual(reloaded, view);
+        assertList(reloaded.dom);
+        assert.equal(writes.length, 1);
+    });
+}
+
+it('preserves number-bearing prose and one numbered line as plain clipboard text', async (t) => {
+    const f = await completeRichTextFixture(t);
+    for (const text of [
+        'Release version 10. Publish when ready.',
+        '10. Inspect',
+    ]) {
+        const ref = createRef<NativeRichTextEditorHandle>();
+        const writes: string[] = [];
+        await f.render(
+            h(ControlledCompleteEditor, { key: text, editorRef: ref, writes })
+        );
+        const { view } = await f.editor(ref);
+        await f.select(view, 1);
+        await f.paste(view, { 'text/plain': text });
+        assert.equal(view.dom.textContent, text);
+        assert.equal(view.dom.querySelector('ol'), null);
+        assert.equal(writes.length, 1);
+    }
+});
+
 it('leaves native HTML clipboard parsing intact while explicit VSCode Markdown overrides ordinary HTML', async (t) => {
     const f = await completeRichTextFixture(t);
     const refs = [

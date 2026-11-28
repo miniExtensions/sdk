@@ -611,28 +611,30 @@ async function exerciseCanonicalField({
             identity: 'canonical-mixed-list',
             value: 'Sentinel before mixed list',
         });
+        const selectParagraph = (editor) =>
+            renderCommit(() => {
+                editor.focus();
+                const paragraph = editor.querySelector('p');
+                const range = window.document.createRange();
+                range.selectNodeContents(paragraph);
+                const selection = window.document.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                // Synthetic DOM coverage uses the real native-range bridge; this is
+                // separate from the trusted keyboard/clipboard browser acceptance.
+                editor.dispatchEvent(
+                    new window.KeyboardEvent('keydown', {
+                        key: 'v',
+                        code: 'KeyV',
+                        keyCode: 86,
+                        ctrlKey: true,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+            });
         const mixedEditor = input();
-        await renderCommit(() => {
-            mixedEditor.focus();
-            const paragraph = mixedEditor.querySelector('p');
-            const range = window.document.createRange();
-            range.selectNodeContents(paragraph);
-            const selection = window.document.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
-            // Synthetic DOM coverage uses the real native-range bridge; this is
-            // separate from the trusted keyboard/clipboard browser acceptance.
-            mixedEditor.dispatchEvent(
-                new window.KeyboardEvent('keydown', {
-                    key: 'v',
-                    code: 'KeyV',
-                    keyCode: 86,
-                    ctrlKey: true,
-                    bubbles: true,
-                    cancelable: true,
-                })
-            );
-        });
+        await selectParagraph(mixedEditor);
         await paste(
             mixedEditor,
             '[x] Complete\n[ ] Pending\n\n- Item one\n- Item two'
@@ -661,6 +663,31 @@ async function exerciseCanonicalField({
         });
         assert.equal(input().textContent, 'CompletePendingItem oneItem two');
         assert.equal(writes.length, 2, 'Reload does not publish a new draft');
+        await render({
+            identity: 'canonical-numbered-list',
+            value: 'Sentinel before numbered list',
+        });
+        await selectParagraph(input());
+        const numberedText = '10. Inspect\n11. Publish';
+        await paste(input(), numberedText);
+        const checkNumberedList = () => {
+            const list = input().querySelector('ol');
+            assert.ok(list, 'Packed clipboard should render an ordered list');
+            assert.equal(list.getAttribute('start'), '10');
+            assert.deepEqual(
+                [...list.children].map((item) => item.textContent),
+                ['Inspect', 'Publish']
+            );
+        };
+        checkNumberedList();
+        assert.equal(writes.length, 3);
+        assert.equal(writes[2].trim(), numberedText);
+        await render({
+            identity: 'canonical-numbered-reloaded',
+            value: writes[2],
+        });
+        checkNumberedList();
+        assert.equal(writes.length, 3, 'Reload does not publish a new draft');
         await renderCommit(() =>
             root.render(React.createElement(api.RichTextField, { binding }))
         );

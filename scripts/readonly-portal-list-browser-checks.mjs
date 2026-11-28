@@ -49,6 +49,12 @@ const renderers = {
     },
 };
 function publishCommands(){const snapshot=f.scope.getSnapshot();commands=new Map(snapshot.rows.map(row=>[row.recordId,{revision:snapshot.revision,activate(isCurrent,restore){const invoke=()=>{if(!isCurrent()){proof.retiredRefusals++;return;}void snapshot.actions.openChild(row.recordId);proof.opens.push(row.recordId);child={recordId:row.recordId,isCurrent,restore};render();};if(hold){pending=invoke;proof.held++;}else invoke();}}]));}
+window.replaceBetaOpen=()=>{
+    const previous=commands.get('rec_B');
+    commands=new Map(commands);
+    commands.set('rec_B',{...previous,activate(...args){previous.activate(...args);}});
+    render();
+};
 function change(update){update();publishCommands();render();}
 function navigate(delta){if(!child?.isCurrent())return;const snapshot=f.scope.getSnapshot(),index=snapshot.rows.findIndex(row=>row.recordId===child.recordId),next=snapshot.rows[index+delta];if(!next)return;void snapshot.actions.openChild(next.recordId);proof.opens.push(next.recordId);child={...child,recordId:next.recordId};render();}
 function close(){const previous=child;child=null;render();previous?.restore();}
@@ -187,6 +193,68 @@ async function checkNamedRows(page, origin, entryPoint) {
         ['rec_B']
     );
     assert.equal(after.submits, 0);
+    const heldOpen = [];
+    const dialog = page.getByRole('dialog', {
+        name: 'Synthetic native child',
+    });
+    for (const gesture of ['Space', 'primary pointer']) {
+        const beforePress = await snapshot();
+        const button = await betaOpen.elementHandle();
+        let point;
+        try {
+            if (gesture === 'Space') await page.keyboard.down('Space');
+            else {
+                await betaOpen.scrollIntoViewIfNeeded();
+                const box = await betaOpen.boundingBox();
+                assert(box);
+                point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+                await page.mouse.move(point.x, point.y);
+                await page.mouse.down();
+            }
+            await page.evaluate(() => window.replaceBetaOpen());
+            assert(
+                await button.evaluate(
+                    (node) =>
+                        node.isConnected && node === document.activeElement
+                ),
+                'Refresh keeps the pressed Beta button focused and mounted'
+            );
+            if (gesture === 'Space') await page.keyboard.up('Space');
+            else await page.mouse.up();
+        } finally {
+            await button.dispose();
+        }
+        const afterRelease = await snapshot();
+        heldOpen.push({
+            gesture,
+            opens: afterRelease.opens.slice(beforePress.opens.length),
+            scopeCalls: afterRelease.scopeCalls.slice(
+                beforePress.scopeCalls.length
+            ),
+            submits: afterRelease.submits,
+        });
+        if (await dialog.count()) await control('Close').click();
+        if (gesture === 'Space') await page.keyboard.press('Space');
+        else await page.mouse.click(point.x, point.y);
+        await dialog
+            .getByRole('heading', { name: 'Child rec_B', exact: true })
+            .waitFor();
+        await control('Close').click();
+        assert(
+            await betaOpen.evaluate((node) => document.activeElement === node)
+        );
+        const afterFresh = await snapshot();
+        assert.deepEqual(afterFresh.opens.slice(afterRelease.opens.length), [
+            'rec_B',
+        ]);
+        assert.deepEqual(
+            afterFresh.scopeCalls
+                .slice(afterRelease.scopeCalls.length)
+                .map(({ recordId }) => recordId),
+            ['rec_B']
+        );
+        assert.equal(afterFresh.submits, 0);
+    }
     return {
         entryPoint,
         rowLabels: ['Account North', 'Account South', 'Account West'],
@@ -196,6 +264,7 @@ async function checkNamedRows(page, origin, entryPoint) {
         ],
         opens: after.opens,
         submits: after.submits,
+        heldOpen,
     };
 }
 
@@ -639,6 +708,18 @@ export async function checkReadonlyPortalListBrowser({
                     await checkNamedRows(page, origin, entryPoint)
                 );
             }
+            for (const { entryPoint, heldOpen } of profile.namedRows)
+                for (const observation of heldOpen)
+                    assert.deepEqual(
+                        observation,
+                        {
+                            gesture: observation.gesture,
+                            opens: [],
+                            scopeCalls: [],
+                            submits: 0,
+                        },
+                        `${entryPoint} refuses the obsolete ${observation.gesture} press`
+                    );
             await checkDetailTitles(page, origin, profile);
             assert.deepEqual(errors, []);
             assert.deepEqual(warnings, []);

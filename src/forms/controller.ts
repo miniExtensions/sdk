@@ -498,6 +498,7 @@ export const createFormController = (
                     requestOptions.options ?? owner.saveOptions
                 ),
             });
+            const isCreate = input.formRecord.type === 'create';
             const controller = new AbortController();
             const externalSignal = requestOptions.signal;
             const forwardAbort = () => controller.abort(externalSignal?.reason);
@@ -508,6 +509,10 @@ export const createFormController = (
                 | ReturnType<FormSaveLifecycle['dispatch']>
                 | undefined;
             let acceptedOperation = false;
+            let acknowledgedCreate = false;
+            const requireUnaborted = () => {
+                if (!acknowledgedCreate) controller.signal.throwIfAborted();
+            };
             let transportInvoked = false;
             let operationFinished = false;
             const finishOperation = () => {
@@ -533,7 +538,7 @@ export const createFormController = (
                 beforeDispatch = false,
                 readRevision = () => owner.store.revision(owner.handle)
             ) => {
-                controller.signal.throwIfAborted();
+                requireUnaborted();
                 if (
                     !ownsAttempt() ||
                     (beforeDispatch && readRevision() !== draftRevision)
@@ -542,7 +547,7 @@ export const createFormController = (
             };
             const requireAttempt = (beforeDispatch = false) => {
                 if (!ownsAttempt()) throw scopeError();
-                controller.signal.throwIfAborted();
+                requireUnaborted();
                 // Scope/session getters are application code. Run them before
                 // the caller's final draft/input/configuration freshness check.
                 requireScope();
@@ -617,7 +622,9 @@ export const createFormController = (
                 requireAttempt();
                 operation?.accepted(structuredClone(normalized));
                 acceptedOperation = true;
-                // An accepted journal callback may reenter; never touch a successor.
+                // A successful create stays final after abort. Recheck ownership
+                // before publishing it in case acceptance replaced the Form.
+                acknowledgedCreate = isCreate && normalized.type === 'saved';
                 requireAttempt();
                 result = normalized;
                 validationErrors = normalized.validationErrors;
@@ -639,7 +646,7 @@ export const createFormController = (
                 if (saveGeneration !== generation || owner !== context)
                     throw scopeError();
                 requireScope();
-                controller.signal.throwIfAborted();
+                requireUnaborted();
                 return structuredClone(normalized);
             } catch (error) {
                 if (

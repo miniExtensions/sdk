@@ -89,6 +89,8 @@ export function createLinkedChildPanel(options: Options) {
     } | null = null;
     const controls = new Map<string, FieldControl>();
     const wrappers = new Map<string, HTMLDivElement>();
+    let childReview: { pageIndex: number; node: HTMLButtonElement } | null =
+        null;
     let childActions = element('div');
     let childProblems = element('p');
     let pageTitle = element('h4');
@@ -201,6 +203,7 @@ export function createLinkedChildPanel(options: Options) {
         wrappers.clear();
         mounted = null;
         pages = null;
+        childReview = null;
         pane.replaceChildren();
     };
     const renderedCurrent = (revision: number) =>
@@ -333,7 +336,16 @@ export function createLinkedChildPanel(options: Options) {
             page.problems.length === 0
                 ? ''
                 : 'Review the indicated child fields before continuing.';
-        childActions.replaceChildren();
+        const reviewRequired =
+            child.getLoaded().payload.publicFields.state
+                .promptUserBeforeSubmission === true;
+        // A Title change on blur can render between pointer down and up.
+        const retainedReview =
+            reviewRequired && childReview?.pageIndex === page.activePageIndex
+                ? childReview.node
+                : null;
+        for (const action of Array.from(childActions.children))
+            if (action !== retainedReview) action.remove();
         const revision = state.revision;
         const move = (direction: 'back' | 'next') => {
             if (
@@ -359,45 +371,54 @@ export function createLinkedChildPanel(options: Options) {
             refresh();
         };
         if (page.canBack)
-            childActions.append(button('Child Back', () => move('back')));
+            childActions.insertBefore(
+                button('Child Back', () => move('back')),
+                retainedReview
+            );
         if (
             page.pages.some(
                 (entry, index) => index > page.activePageIndex && !entry.hidden
             )
         )
-            childActions.append(button('Child Next', () => move('next')));
-        const reviewRequired =
-            child.getLoaded().payload.publicFields.state
-                .promptUserBeforeSubmission === true;
-        const save = button(
-            reviewRequired ? 'Review child' : 'Save child',
-            () => {
-                if (
-                    !renderedCurrent(revision) ||
-                    !childCurrent(child) ||
-                    !available
-                )
-                    return;
-                try {
-                    readChild();
-                } catch {
-                    options.status(
-                        'Review the child fields before saving.',
-                        true
-                    );
-                    return;
-                }
-                request(
-                    'Saving the linked child…',
-                    revision,
-                    (signal) => owner.save(revision, { signal }),
-                    'save'
-                );
+            childActions.insertBefore(
+                button('Child Next', () => move('next')),
+                retainedReview
+            );
+        const save =
+            retainedReview ??
+            element(
+                'button',
+                reviewRequired ? 'Review child' : 'Save child',
+                'secondary'
+            );
+        save.type = 'button';
+        save.onclick = () => {
+            if (
+                save.parentElement !== childActions ||
+                !renderedCurrent(revision) ||
+                !childCurrent(child) ||
+                !available
+            )
+                return;
+            try {
+                readChild();
+            } catch {
+                options.status('Review the child fields before saving.', true);
+                return;
             }
-        );
+            request(
+                'Saving the linked child…',
+                revision,
+                (signal) => owner.save(revision, { signal }),
+                'save'
+            );
+        };
         save.disabled =
             !available || !(reviewRequired ? page.canReview : page.canSubmit);
-        childActions.append(save);
+        if (retainedReview == null) childActions.append(save);
+        childReview = reviewRequired
+            ? { pageIndex: page.activePageIndex, node: save }
+            : null;
         for (const button of childActions.querySelectorAll('button'))
             button.disabled ||= !available || !options.canStart();
     };

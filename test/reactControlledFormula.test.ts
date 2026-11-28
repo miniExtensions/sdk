@@ -411,6 +411,37 @@ it('masks before every rich mode and preserves configured size, height and acces
     }
 });
 
+it('numbers only Formula Grid attachment actions and keeps exact duplicate occurrences', async (t) => {
+    const f = await fixture(t);
+    const entries = [{ url }, { url }];
+    const formula = valid({ value: url, renderFormulaAsAttachment: true });
+    const buttons = () => [
+        ...f.container.querySelectorAll('.mx-sdk-url-gallery__open'),
+    ];
+    const names = () =>
+        buttons().map((button) => button.getAttribute('aria-label'));
+    await f.formula({ ...formula, gallery: { entries } });
+    const rootButtons = buttons();
+    assert.deepEqual(names(), [url, url]);
+    await f.formula({ ...formula, gallery: { entries, isInGrid: true } });
+    assert.deepEqual(names(), ['Open attachment 1', 'Open attachment 2']);
+    await f.formula({
+        ...formula,
+        language: 'es',
+        gallery: {
+            entries,
+            isInGrid: true,
+            labels: { openAttachment: 'Abrir archivo' },
+        },
+    });
+    assert.deepEqual(names(), ['Abrir archivo 1', 'Abrir archivo 2']);
+    buttons().forEach((button, index) =>
+        assert.equal(button, rootButtons[index])
+    );
+    await f.formula({ ...formula, gallery: { entries } });
+    assert.deepEqual(names(), [url, url]);
+});
+
 it('keeps Formula gallery controls readonly and isolated from sibling values and implicit Form submit', async (t) => {
     const f = await fixture(t);
     let submits = 0;

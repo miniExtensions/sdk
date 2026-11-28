@@ -56,4 +56,5 @@
 .mx-sdk-portal-summary-cards[data-height='extra tall']
     .mx-sdk-portal-summary-value {
     -webkit-line-clamp: 4;
+    overflow-wrap: anywhere;
 }

@@ -340,8 +340,14 @@ export async function checkBrowserLinkedFilterExample({
             name: 'delayed conditional-filter discovery cannot cross A→B→A or dispose boundaries',
             stale: true,
         },
+        {
+            name: 'overlapping choices retain one checkbox per ID and save both same-caption records once',
+            overlap: true,
+            captionPolicy: {},
+        },
     ];
     let revision = 0;
+    let overlap;
     for (const scenario of scenarios) {
         const query = scenario.ordered
             ? '?prefill_Current%20country=North%2C%20East&prefill_Current%20region=Duplicate%20label&prefill_Current%20city=City%20%3D%20%22One%22&prefill_Country=old%20name'
@@ -442,7 +448,16 @@ export async function checkBrowserLinkedFilterExample({
                 reads.push(JSON.parse(String(init?.body)));
                 const options = linkedOptions();
                 const policy = scenario.captionPolicy;
-                if (policy != null) {
+                if (scenario.overlap) {
+                    const more = reads.at(-1).offset != null;
+                    options.records = (
+                        more ? options.records : options.records.slice(0, 1)
+                    ).map((record) => ({
+                        ...record,
+                        fields: { fld_project_name: 'Shared project' },
+                    }));
+                    if (more) options.offset = null;
+                } else if (policy != null) {
                     if (reads.at(-1).offset != null) {
                         options.records = [
                             {
@@ -532,7 +547,81 @@ export async function checkBrowserLinkedFilterExample({
             );
             assert.equal(bootstraps.length, 0);
             assert.equal(saves.length, 0);
-            if (scenario.captionPolicy != null) {
+            if (scenario.overlap) {
+                const choices = () => [
+                    ...outer(window).querySelectorAll(
+                        '.choice-list input[type="checkbox"]'
+                    ),
+                ];
+                await searchOptions(window);
+                const first = choices();
+                assert.equal(first.length, 1);
+                const [retained] = first;
+                assert.equal(retained.checked, true);
+                assert.deepEqual(rawIds(window), ['rec_retained']);
+
+                button(outer(window), 'More choices').click();
+                await waitFor(() => reads.length === 2 && idle(window));
+                const joined = choices();
+                assert.equal(
+                    joined.length,
+                    2,
+                    'Overlapping pages must render one checkbox per distinct record ID'
+                );
+                const [kept, available] = joined;
+                assert.equal(kept, retained);
+                const captions = joined.map((input) =>
+                    input.closest('label').textContent.trim()
+                );
+                assert.deepEqual(captions, [
+                    'Shared project',
+                    'Shared project',
+                ]);
+                const checkedAfterMore = joined.map((input) => input.checked);
+                assert.deepEqual(checkedAfterMore, [true, false]);
+                const offsets = reads.map((read) => read.offset);
+                assert.deepEqual(offsets, [null, 'cursor_next']);
+                assert.equal(
+                    button(outer(window), 'More choices').disabled,
+                    true
+                );
+
+                retained.checked = false;
+                change(window, retained);
+                assert.deepEqual(rawIds(window), []);
+                retained.checked = true;
+                change(window, retained);
+                assert.deepEqual(rawIds(window), ['rec_retained']);
+                available.checked = true;
+                change(window, available);
+                const selected = rawIds(window);
+                assert.deepEqual(selected, ['rec_retained', 'rec_available']);
+                await settle();
+                assert.equal(saves.length, 0);
+
+                const save = button(outer(window).closest('form'), 'Save');
+                assert.equal(save.disabled, false);
+                submit(window, save.form);
+                await waitFor(() => saves.length === 1 && idle(window));
+                await settle();
+                const savedIds = saves.map(
+                    (request) => request.formRecord.data.fld_projects
+                );
+                assert.deepEqual(savedIds, [['rec_retained', 'rec_available']]);
+                assert.deepEqual(saves[0].formFieldIdsWithUnsavedChanges, [
+                    'fld_projects',
+                ]);
+                assert.equal(bootstraps.length, 0);
+                assert.equal(filters.length, 0);
+                assert.equal(reads.length, 2);
+                overlap = {
+                    offsets,
+                    captions,
+                    checkedAfterMore,
+                    selected,
+                    savedIds,
+                };
+            } else if (scenario.captionPolicy != null) {
                 const policy = scenario.captionPolicy;
                 const choices = () => [
                     ...outer(window).querySelectorAll('.choice-list label'),
@@ -949,7 +1038,7 @@ export async function checkBrowserLinkedFilterExample({
             await window.happyDOM.close();
         }
     }
-    return { checks: scenarios.length };
+    return { checks: scenarios.length, overlap };
 }
 
 export const linkedFilterExampleFixtures = {

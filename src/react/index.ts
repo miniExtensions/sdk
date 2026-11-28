@@ -3220,6 +3220,11 @@ export type ReadonlyPortalListProps<
     openActions?: ReadonlyMap<string, ReadonlyPortalListOpenAction>;
 };
 
+type PreparedPortalOpen = {
+    isCurrent: () => boolean;
+    activate: () => void;
+};
+
 function usePortalOpen<S extends ReadonlyPortalListSnapshot>(
     scope: PortalPresentationSource<S>,
     revision: number,
@@ -3259,7 +3264,7 @@ function usePortalOpen<S extends ReadonlyPortalListSnapshot>(
         recordId: string,
         action: ReadonlyPortalListOpenAction,
         trigger: HTMLButtonElement
-    ) => {
+    ): PreparedPortalOpen | undefined => {
         const registration = committed.current?.registrations.get(recordId);
         if (registration?.action !== action) return;
         const isCurrent = () => {
@@ -3282,11 +3287,81 @@ function usePortalOpen<S extends ReadonlyPortalListSnapshot>(
                 return false;
             }
         };
-        if (!isCurrent()) return;
-        action.activate(isCurrent, () => {
-            if (isCurrent()) trigger.focus({ preventScroll: true });
-        });
+        return {
+            isCurrent,
+            activate() {
+                if (!isCurrent()) return;
+                action.activate(isCurrent, () => {
+                    if (isCurrent()) trigger.focus({ preventScroll: true });
+                });
+            },
+        };
     };
+}
+
+function ReadonlyPortalListOpenButton({
+    label,
+    rowLabel,
+    testId,
+    prepare,
+}: {
+    label: string;
+    rowLabel?: string | null;
+    testId?: string;
+    prepare: (trigger: HTMLButtonElement) => PreparedPortalOpen | undefined;
+}) {
+    const pointer = useRef<{
+        id: number;
+        open: PreparedPortalOpen | undefined;
+    } | null>(null);
+    const space = useRef<{ open: PreparedPortalOpen | undefined } | null>(null);
+    return createElement(
+        'button',
+        {
+            type: 'button',
+            className: 'mx-sdk-readonly-portal-list__open',
+            'aria-label': rowLabel ? `${label} ${rowLabel}` : undefined,
+            'data-testid': testId,
+            onPointerDown(event: PointerEvent<HTMLButtonElement>) {
+                if (event.isPrimary && event.button === 0)
+                    pointer.current = {
+                        id: event.pointerId,
+                        open: prepare(event.currentTarget),
+                    };
+            },
+            onPointerCancel(event: PointerEvent<HTMLButtonElement>) {
+                if (pointer.current?.id === event.pointerId)
+                    pointer.current = null;
+            },
+            onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+                if (event.key === ' ' && !event.repeat)
+                    space.current = { open: prepare(event.currentTarget) };
+            },
+            onKeyUp(event: KeyboardEvent<HTMLButtonElement>) {
+                if (event.key !== ' ') return;
+                const pressed = space.current;
+                space.current = null;
+                // Native Space activates on release. A retired command must
+                // not turn that release into a click on its replacement.
+                if (pressed && !pressed.open?.isCurrent())
+                    event.preventDefault();
+            },
+            onBlur() {
+                space.current = null;
+            },
+            onClick(event: MouseEvent<HTMLButtonElement>) {
+                event.preventDefault();
+                event.stopPropagation();
+                const pressed = event.detail > 0 ? pointer.current : null;
+                if (pressed) pointer.current = null;
+                const open = pressed
+                    ? pressed.open
+                    : prepare(event.currentTarget);
+                open?.activate();
+            },
+        },
+        label
+    );
 }
 
 function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
@@ -3304,7 +3379,7 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
     openRecordLabel: string;
     recordLabel?: ReadonlyPortalListProps<S>['recordLabel'];
 }): ReactNode {
-    const open = usePortalOpen(scope, state.revision, openActions);
+    const prepareOpen = usePortalOpen(scope, state.revision, openActions);
     return createElement(
         'div',
         { className: 'mx-sdk-readonly-portal-list' },
@@ -3341,30 +3416,13 @@ function ReadonlyPortalListContent<S extends ReadonlyPortalListSnapshot>({
                 );
                 const openButton =
                     action?.revision === state.revision
-                        ? createElement(
-                              'button',
-                              {
-                                  type: 'button',
-                                  className:
-                                      'mx-sdk-readonly-portal-list__open',
-                                  'aria-label': rowLabel
-                                      ? `${openRecordLabel} ${rowLabel}`
-                                      : undefined,
-                                  'data-testid': action.testId,
-                                  onClick: (
-                                      event: import('react').MouseEvent<HTMLButtonElement>
-                                  ) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      open(
-                                          row.recordId,
-                                          action,
-                                          event.currentTarget
-                                      );
-                                  },
-                              },
-                              openRecordLabel
-                          )
+                        ? createElement(ReadonlyPortalListOpenButton, {
+                              label: openRecordLabel,
+                              rowLabel,
+                              testId: action.testId,
+                              prepare: (trigger) =>
+                                  prepareOpen(row.recordId, action, trigger),
+                          })
                         : null;
                 return createElement(
                     'li',
@@ -3482,7 +3540,7 @@ function ReadonlyPortalRecordsGrid<S extends ReadonlyPortalListSnapshot>({
         state.rows.every(
             (row) => openActions.get(row.recordId)?.revision === state.revision
         );
-    const open = usePortalOpen(
+    const prepareOpen = usePortalOpen(
         scope,
         state.revision,
         controlsReady ? openActions : undefined,
@@ -3519,7 +3577,8 @@ function ReadonlyPortalRecordsGrid<S extends ReadonlyPortalListSnapshot>({
         onOpenRecord: controlsReady
             ? (recordId, trigger) => {
                   const action = openActions.get(recordId);
-                  if (action) open(recordId, action, trigger);
+                  if (action)
+                      prepareOpen(recordId, action, trigger)?.activate();
               }
             : undefined,
     });

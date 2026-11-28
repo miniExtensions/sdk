@@ -268,6 +268,50 @@ export async function checkFormSaveIdentityConsumer({ consumerDirectory }) {
             }
         }
         {
+            const response = saved('rec_create_acknowledged');
+            const f = make(response, 'create');
+            const request = new AbortController();
+            let acceptedId;
+            try {
+                const result = await f.controller.save({
+                    signal: request.signal,
+                    lifecycle: {
+                        dispatch(input, revision) {
+                            const operation = f.lifecycle.dispatch(
+                                input,
+                                revision
+                            );
+                            return {
+                                ...operation,
+                                accepted(result) {
+                                    operation.accepted(result);
+                                    acceptedId = result.raw.record.id;
+                                    request.abort();
+                                },
+                            };
+                        },
+                    },
+                });
+                assert.deepEqual(result.raw, response, format);
+                assert.equal(acceptedId, response.record.id, format);
+                assert.equal(f.acceptances, 1, format);
+                assert.equal(f.controller.getState().status, 'saved', format);
+                assert.equal(f.controller.getState().canSave, false, format);
+                assert.equal(f.attempt.outcome, 'saved', format);
+                assert.equal(f.attempt.flight, false, format);
+                assert.deepEqual(f.dispositions, ['dispatched'], format);
+                await assert.rejects(
+                    f.controller.save({ signal: new AbortController().signal }),
+                    { code: 'reload-required' }
+                );
+                assert.equal(f.calls.length, 1, format);
+                assert.equal(f.calls[0].formRecord.type, 'create', format);
+                checks++;
+            } finally {
+                f.controller.destroy();
+            }
+        }
+        {
             const response = {
                 type: 'error',
                 formErrors: { fld_title: 'Review the title.' },

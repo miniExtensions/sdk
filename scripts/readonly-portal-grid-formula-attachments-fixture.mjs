@@ -32,14 +32,19 @@ const fieldSchema = columns.map(([id, name, type]) => ({
                 : null,
     },
 }));
+const params = new URLSearchParams(location.search);
+const spanish = params.has('spanish');
 const entries = [
     { url: location.origin + '/first.png' },
-    { url: location.origin + '/second.jpg' },
+    { url: location.origin + (spanish ? '/first.png' : '/second.jpg') },
 ];
 const formulaOutput = entries.map(({ url }) => url).join(' ');
 const gallery = {
     entries,
-    labels: { attachments: 'Formula attachment preview' },
+    labels: {
+        attachments: 'Formula attachment preview',
+        ...(spanish ? { openAttachment: 'Abrir archivo' } : {}),
+    },
 };
 const records = Object.freeze([
     Object.freeze({
@@ -106,7 +111,7 @@ const renderers = {
             type: field.field.config.type,
         };
         const projected = projectComputedFormulaDisplay({
-            language: 'en',
+            language: spanish ? 'es' : 'en',
             isValid: field.field.config.options.isValid,
             resultType: field.field.config.options.result.type,
             value: field.value,
@@ -153,7 +158,7 @@ function GridFixture() {
     );
 }
 
-const isStandalone = new URLSearchParams(location.search).has('standalone');
+const isStandalone = params.has('standalone');
 createRoot(document.getElementById('root')).render(
     h(
         StrictMode,

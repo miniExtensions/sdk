@@ -1066,6 +1066,91 @@ window.commentsProof = {
             group: 'deferred-older-page-retains-selection',
         });
 
+        const phrase = 'Meet at Gate 4';
+        const undoResults = [];
+        for (const paging of [false, true]) {
+            await open('native-history-selection');
+            const composer = page.getByRole('textbox', {
+                name: 'Add a comment',
+                exact: true,
+            });
+            await composer.focus();
+            const original = await composer.elementHandle();
+            assert(original);
+            await page.keyboard.type(phrase);
+            assert.equal(await composer.inputValue(), phrase);
+            await page.keyboard.press('ControlOrMeta+a');
+            await page.keyboard.press('Backspace');
+            assert.equal(await composer.inputValue(), '');
+            if (paging) {
+                await page
+                    .getByRole('button', {
+                        name: 'Load older comments',
+                        exact: true,
+                    })
+                    .click();
+                await page.waitForFunction(() =>
+                    window.commentsProof.hasPendingOlder()
+                );
+                assert.equal(await composer.count(), 0);
+                assert.equal(
+                    await page
+                        .getByRole('button', { name: 'Send', exact: true })
+                        .count(),
+                    0
+                );
+                await page.evaluate(() => window.commentsProof.releaseOlder());
+                await page
+                    .getByText(historyFixture.older, { exact: true })
+                    .waitFor();
+                assert.deepEqual(
+                    await page
+                        .locator('.mx-sdk-comments-text')
+                        .allTextContents(),
+                    [historyFixture.older, historyFixture.newer]
+                );
+            }
+            await composer.focus();
+            const sameComposer = await composer.evaluate(
+                (node, first) => node === first,
+                original
+            );
+            await original.dispose();
+            await page.keyboard.press('ControlOrMeta+z');
+            const value = await composer.inputValue();
+            const stats = await page.evaluate(() =>
+                window.commentsProof.snapshot()
+            );
+            undoResults.push({ paging, value, sameComposer, ...stats });
+            evidence.composerUndo = undoResults;
+            assert.deepEqual(stats, {
+                reads: [
+                    { childExtensionAccessToken: 'captured-A' },
+                    ...(paging
+                        ? [
+                              {
+                                  childExtensionAccessToken: 'captured-A',
+                                  cursor: historyFixture.cursor,
+                              },
+                          ]
+                        : []),
+                ],
+                writes: [],
+                invalidations: [],
+                dismissals: 0,
+                submits: 0,
+            });
+            assert.equal(
+                value,
+                phrase,
+                paging ? 'Undo after older history' : 'Undo control'
+            );
+            assert.equal(sameComposer, true);
+        }
+        evidence.results.push({
+            group: 'deferred-older-page-retains-composer-undo',
+        });
+
         assert.deepEqual(evidence.pageErrors, []);
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.scope =

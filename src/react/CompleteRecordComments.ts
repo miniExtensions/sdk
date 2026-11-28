@@ -225,18 +225,23 @@ export function CompleteRecordComments(
             )
         ),
         h('div', { className: 'mx-sdk-comments-body' }, body),
-        state.readStatus === 'ready' &&
-            !state.loadingOlder &&
-            !state.disableSending
+        state.readStatus === 'ready' && !state.disableSending
             ? h(
                   'footer',
-                  { className: 'mx-sdk-comments-footer' },
+                  {
+                      className: 'mx-sdk-comments-footer',
+                      // Keep the native textarea and its Undo history across paging.
+                      hidden: state.loadingOlder,
+                      style: state.loadingOlder
+                          ? { display: 'none' }
+                          : undefined,
+                  },
                   h(TextareaInput, {
                       value: state.draft,
                       onChange: (event) =>
                           act(() => controller.setDraft(event.target.value)),
                       autoSize: { minRows: 2, maxRows: 5 },
-                      disabled: state.sending,
+                      disabled: state.sending || state.loadingOlder,
                       placeholder: labels.addComment,
                       'aria-label': labels.addComment,
                       autoComplete: 'off',
@@ -246,7 +251,10 @@ export function CompleteRecordComments(
                       {
                           type: 'button',
                           className: 'mx-sdk-comments-send',
-                          disabled: state.sending || state.draft.length === 0,
+                          disabled:
+                              state.sending ||
+                              state.loadingOlder ||
+                              state.draft.length === 0,
                           onClick: (event: MouseEvent<HTMLButtonElement>) => {
                               const button = event.currentTarget;
                               const keyboardActivation = event.detail === 0;

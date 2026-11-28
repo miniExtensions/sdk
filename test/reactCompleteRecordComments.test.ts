@@ -605,8 +605,12 @@ it('older-page loading hides the composer and explicit recovery retains its draf
     const f = await fixture(t, { controller });
     f.host.addEventListener('submit', () => submits++);
     await act(async () => controller.setDraft('retained raw draft'));
+    const composer = f.host.querySelector('textarea');
+    assert.ok(composer);
     await f.click(recordCommentsLabels.older);
-    assert.equal(f.host.querySelector('textarea'), null);
+    assert.equal(f.host.querySelector('textarea'), composer);
+    assert.equal(composer.closest('footer')?.hasAttribute('hidden'), true);
+    assert.equal(composer.disabled, true);
     assert.equal(await controller.send(), false);
     await act(async () =>
         older.reject(new Error('Synthetic older-page failure'))
@@ -615,7 +619,9 @@ it('older-page loading hides the composer and explicit recovery retains its draf
         f.host.querySelector('[role=alert]')?.textContent,
         'Synthetic older-page failure'
     );
-    assert.equal(f.host.querySelector('textarea')?.value, 'retained raw draft');
+    assert.equal(f.host.querySelector('textarea'), composer);
+    assert.equal(composer.value, 'retained raw draft');
+    assert.equal(composer.disabled, false);
     assert.equal(reads, 2);
     await f.click(recordCommentsLabels.older);
     const commentBodies = () => [
@@ -652,7 +658,10 @@ it('older-page loading hides the composer and explicit recovery retains its draf
     assert.equal(selection.anchorNode === originalText, true);
     assert.equal(selection.focusNode === originalText, true);
     assert.equal(selection.toString(), gate);
-    assert.equal(f.host.querySelector('textarea')?.value, 'retained raw draft');
+    assert.equal(f.host.querySelector('textarea'), composer);
+    assert.equal(composer.value, 'retained raw draft');
+    assert.equal(composer.closest('footer')?.hasAttribute('hidden'), false);
+    assert.equal(composer.disabled, false);
     assert.equal(controller.getSnapshot().disableSending, false);
     assert.equal(writes, 0);
     assert.equal(submits, 0);

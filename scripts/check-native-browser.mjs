@@ -2657,6 +2657,7 @@ try {
                 unchangedReopen: true,
             },
             textOperatorRetainedOperand: true,
+            choiceOperatorRetainedOperand: true,
             focusRestored: true,
             cleanup: 'completed',
         });

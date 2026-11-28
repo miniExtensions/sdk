@@ -98,6 +98,95 @@ function host() {
     };
 }
 
+test('retains admitted Multiple Select operands in order when switching between any and all', async () => {
+    const choices = [
+        { value: 'red', label: 'Red' },
+        { value: 'blue', label: 'Blue' },
+        { value: 'yellow', label: 'Yellow' },
+    ];
+    const admittedForAll = choices.slice(0, 2);
+    const setting = (
+        type: 'hasAnyOf' | 'hasAllOf',
+        value: string[]
+    ): RuntimeConditionSetting => ({
+        fieldType: 'multipleSelects',
+        idOrName: { type: 'id', id: 'labels' },
+        type,
+        value,
+    });
+    const cases = [
+        {
+            from: 'hasAnyOf',
+            to: 'hasAllOf',
+            value: ['blue', 'red'],
+            expected: ['blue', 'red'],
+        },
+        {
+            from: 'hasAllOf',
+            to: 'hasAnyOf',
+            value: ['blue', 'red'],
+            expected: ['blue', 'red'],
+        },
+        {
+            from: 'hasAnyOf',
+            to: 'hasAllOf',
+            value: ['blue', 'yellow'],
+            expected: ['red'],
+        },
+    ] as const;
+    for (const { from, to, value, expected } of cases) {
+        const owner = host();
+        const first = leaf('labels-rule', setting(from, [...value]));
+        const initial: RuntimeConditionsDefinition = {
+            logicalOperator: 'or',
+            conditions: [first, known],
+        };
+        owner.update({
+            ...owner.read(),
+            criteria: initial,
+            effectiveSettings: {},
+            fields: [
+                ...owner.read().fields,
+                {
+                    id: 'labels',
+                    name: 'Labels',
+                    operators: [
+                        {
+                            label: 'Has any of',
+                            setting: setting('hasAnyOf', []),
+                            operand: { kind: 'choices', choices },
+                        },
+                        {
+                            label: 'Has all of',
+                            setting: setting('hasAllOf', ['red']),
+                            operand: {
+                                kind: 'choices',
+                                choices: admittedForAll,
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+        const draft = createPortalVisitorFilterDraft(owner.port);
+        assert.ok(draft);
+        assert.equal(draft.setOperator(first.id, to), true);
+        assert.deepEqual(owner.calls, []);
+        const edited = setting(to, [...expected]);
+        assert.deepEqual(draft.settingForEditor(first.id), edited);
+        assert.equal((await draft.commit()).type, 'allocated');
+        assert.deepEqual(owner.calls, [
+            {
+                stamp: owner.read().stamp,
+                criteria: {
+                    ...initial,
+                    conditions: [leaf(first.id, edited), known],
+                },
+            },
+        ]);
+    }
+});
+
 test('text length starts unset without weakening numeric or malformed operands', async () => {
     const owner = host();
     const setting = {

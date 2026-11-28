@@ -808,6 +808,21 @@ function createDraftForFrame(
                     ...operator.setting,
                     value,
                 } as RuntimeConditionSetting);
+            } else if (
+                setting.fieldType === 'multipleSelects' &&
+                operator.setting.fieldType === 'multipleSelects' &&
+                ((setting.type === 'hasAnyOf' &&
+                    operator.setting.type === 'hasAllOf') ||
+                    (setting.type === 'hasAllOf' &&
+                        operator.setting.type === 'hasAnyOf')) &&
+                selected.operator.operand.kind === 'choices' &&
+                operator.operand.kind === 'choices' &&
+                validOperand(operator.operand, setting.value)
+            ) {
+                editSetting(leaf, {
+                    ...operator.setting,
+                    value: setting.value,
+                });
             } else {
                 editSetting(leaf, operator.setting);
             }

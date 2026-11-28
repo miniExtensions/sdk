@@ -941,6 +941,53 @@ it('real Form defaults to generic existing labels and keeps a queue over chooser
     assert.equal(f.counters.uploads.length, 0);
 });
 
+it('real Form queues a valid PNG alongside a size rejection and keeps count overflow atomic', async (t) => {
+    const f = await realForm(
+        t,
+        { allowedAttachmentTypes: ['images'], allowedFiles: 2, sizeLimit: 1 },
+        []
+    );
+    await f.render(f.tree());
+    const bytes = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aPs0AAAAASUVORK5CYII=',
+        'base64'
+    );
+    const file = (name: string, padding = 0) =>
+        new f.window.File([bytes, new Uint8Array(padding)], name, {
+            type: 'image/png',
+        }) as unknown as File;
+    const small = file('PRIVATE_small.png');
+    const tooLarge = file('PRIVATE_large.png', 1024 * 1024);
+
+    await pick(f, [small, file('second.png'), file('third.png')]);
+    assert.deepEqual(f.controller.getSnapshot().files, []);
+    assert.equal(f.button('Upload next file').disabled, true);
+    assert.equal(f.counters.uploads.length, 0);
+
+    await pick(f, [tooLarge, small]);
+    assert.deepEqual(f.controller.getSnapshot().files, [small]);
+    assert.equal(f.controller.getSnapshot().files[0], small);
+    const status = f.container.querySelector('[role="status"]');
+    assert.match(status?.textContent ?? '', /1 pending file/);
+    assert.match(
+        status?.textContent ?? '',
+        /Attachment activity could not be completed/
+    );
+    assert.equal(
+        f.container.querySelector('section')?.getAttribute('aria-invalid'),
+        'true'
+    );
+    assert.equal(f.container.textContent?.includes(tooLarge.name), false);
+    assert.equal(f.counters.uploads.length, 0);
+    assert.equal(f.counters.requests, 0);
+
+    await act(async () => f.button('Upload next file').click());
+    assert.equal(f.counters.uploads.length, 1);
+    assert.equal(f.counters.uploads[0], small);
+    assert.deepEqual(f.controller.getSnapshot().files, []);
+    assert.equal(f.counters.saves, 0);
+});
+
 it('real Form uploads exactly the first queued File per explicit click, appends native results and never saves', async (t) => {
     const f = await realForm(t);
     await f.render(f.tree());

@@ -19,7 +19,6 @@
     border-color: var(--mx-sdk-portal-map-focus-border-color, inherit);
     border-radius: inherit;
     background: inherit;
-    box-shadow: inherit;
     outline: 2px solid
         var(
             --mx-sdk-portal-map-focus-outline-color,

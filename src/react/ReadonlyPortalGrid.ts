@@ -597,6 +597,7 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
             column.fieldId === props.primaryFieldId ||
             props.hiddenColumns[column.fieldId] !== true
     );
+    const visibleFieldIds = new Set(visible.map(({ fieldId }) => fieldId));
     const heights: readonly string[] = [
         'short',
         'medium',
@@ -700,8 +701,26 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                 h(
                     'tbody',
                     null,
-                    props.rows.map((row) =>
-                        h(
+                    props.rows.map((row) => {
+                        const firstCellByFieldId = new Map<
+                            string,
+                            ReadonlyPortalGridRow['cells'][number]
+                        >();
+                        const cells = visibleFieldIds.size > 0 ? row.cells : [];
+                        for (const cell of cells) {
+                            const { fieldId } = cell;
+                            if (
+                                !visibleFieldIds.has(fieldId) ||
+                                firstCellByFieldId.has(fieldId)
+                            )
+                                continue;
+                            firstCellByFieldId.set(fieldId, cell);
+                            if (
+                                firstCellByFieldId.size === visibleFieldIds.size
+                            )
+                                break;
+                        }
+                        return h(
                             'tr',
                             {
                                 key: row.recordId,
@@ -723,10 +742,8 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                                         {
                                             className: `mx-sdk-readonly-grid__cell-content cell-${rowHeight}`,
                                         },
-                                        row.cells.find(
-                                            (cell) =>
-                                                cell.fieldId === column.fieldId
-                                        )?.node ?? null
+                                        firstCellByFieldId.get(column.fieldId)
+                                            ?.node ?? null
                                     )
                                 )
                             ),
@@ -764,8 +781,8 @@ export function ReadonlyPortalGrid(props: ReadonlyPortalGridProps): ReactNode {
                                         labels.openRecord
                                     )
                                 )
-                        )
-                    )
+                        );
+                    })
                 )
             )
         ),

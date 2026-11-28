@@ -254,7 +254,7 @@ export async function checkReadonlyPortalGridReactMatrix({
     );
     assert(source.includes("'../src/react/ReadonlyPortalGrid.js'"));
     const profiles = [];
-    const componentCases = 23;
+    const componentCases = 24;
     const multipleSelectCellCases = 2;
     const textCellCases = 6;
     const multilineCellCases = 5;
@@ -353,6 +353,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 ]);
             }
             for (const format of ['esm', 'cjs']) {
+                let wideGridFieldIdReads;
                 const extension = format === 'esm' ? 'mjs' : 'cjs';
                 writeFileSync(
                     join(root, `grid-fixture.${extension}`),
@@ -420,11 +421,17 @@ export async function checkReadonlyPortalGridReactMatrix({
                         '--test-reporter=tap',
                         testName,
                     ]);
-                    if (name === 'readonly-grid')
+                    if (name === 'readonly-grid') {
                         assert.match(
                             output,
                             /^ok \d+ - marks only the configured visible primary header and cells without reordering or marking Open$/m
                         );
+                        const counts = /^# Grid field ID reads (\{.*\})$/m.exec(
+                            output
+                        );
+                        assert.ok(counts, 'Expected wide Grid read counts');
+                        wideGridFieldIdReads = JSON.parse(counts[1]);
+                    }
                     for (const [counter, count] of [
                         ['tests', cases],
                         ['pass', cases],
@@ -454,6 +461,7 @@ export async function checkReadonlyPortalGridReactMatrix({
                 profiles.push({
                     react,
                     format,
+                    wideGridFieldIdReads,
                     dateTime,
                     duration,
                     tests: componentCases,

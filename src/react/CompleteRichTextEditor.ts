@@ -14,7 +14,7 @@ import {
     type CSSProperties,
 } from 'react';
 import {
-    NativeRichTextEditor,
+    NativeRichTextEditorWithSerialization,
     type NativeRichTextEditorHandle,
 } from './NativeRichTextEditor.js';
 
@@ -163,13 +163,14 @@ const OwnedRichTextEditor = forwardRef<
             'aria-busy': !runtime || undefined,
         },
         runtime
-            ? createElement(NativeRichTextEditor, {
+            ? createElement(NativeRichTextEditorWithSerialization, {
                   ref: attach,
                   value: props.value,
                   onValueChange: props.onValueChange,
                   readOnly: props.readOnly,
                   placeholder: props.placeholder,
                   emptyContent: props.emptyContent,
+                  serialization: runtime.richTextEditorSerialization,
                   renderEditor: (native, focused) =>
                       runtime.renderEditor(native, focused, portals),
               })

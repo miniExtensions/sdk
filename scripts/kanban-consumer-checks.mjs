@@ -1179,7 +1179,52 @@ export async function checkKanbanBrowser({ page, origin, evidence }) {
 
         for (const flag of ['readOnly', 'modalOpen']) {
             await reset();
+            if (flag === 'readOnly')
+                assert.equal(await source('b').getAttribute('tabindex'), '0');
             await replace({ [flag]: true });
+            if (flag === 'readOnly') {
+                const before = await state();
+                const focus = () =>
+                    page.evaluate(() => {
+                        const element = document.activeElement;
+                        return {
+                            name: element?.getAttribute('aria-label') ?? null,
+                            wrapper:
+                                element?.getAttribute('data-kanban-record') ??
+                                null,
+                        };
+                    });
+                await source('a')
+                    .getByRole('button', { name: 'Unlink a', exact: true })
+                    .focus();
+                const start = await focus();
+                await page.keyboard.press('Tab');
+                const forward = await focus();
+                await page.keyboard.press('Shift+Tab');
+                const reverse = await focus();
+                const after = await state();
+                const effects = {
+                    opens: after.calls.opens.length - before.calls.opens.length,
+                    unlinks:
+                        after.calls.unlinks.length -
+                        before.calls.unlinks.length,
+                    submits: after.calls.submits - before.calls.submits,
+                    operations:
+                        after.calls.events.length - before.calls.events.length,
+                };
+                result.readOnlyTabOrder = { start, forward, reverse, effects };
+                assert.deepEqual(result.readOnlyTabOrder, {
+                    start: { name: 'Unlink a', wrapper: null },
+                    forward: { name: 'Open b', wrapper: null },
+                    reverse: { name: 'Unlink a', wrapper: null },
+                    effects: {
+                        opens: 0,
+                        unlinks: 0,
+                        submits: 0,
+                        operations: 0,
+                    },
+                });
+            }
             const count = (await state()).calls.events.length;
             await startMouse('a');
             await moveMouse('Closed');

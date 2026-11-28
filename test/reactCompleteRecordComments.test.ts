@@ -476,6 +476,43 @@ it('owner replacement isolates successor draft from original pending append sett
     assert.equal(next.getSnapshot().sendError, null);
 });
 
+it('replaces the retained composer when an already loaded owner takes over during paging', async (t) => {
+    const pending = deferred<ListRecordCommentsResult>();
+    const first = createRecordCommentsController({
+        owner: { isCurrent: () => true },
+        childExtensionAccessToken: 'A',
+        list: async ({ cursor }) =>
+            cursor ? pending.promise : { ...empty, nextCursor: 'older' },
+        append: async () => assert.fail('Unexpected append'),
+        invalidate: () => assert.fail('Unexpected invalidation'),
+    });
+    const next = createRecordCommentsController({
+        owner: { isCurrent: () => true },
+        childExtensionAccessToken: 'B',
+        list: async () => empty,
+        append: async () => assert.fail('Unexpected append'),
+        invalidate: () => assert.fail('Unexpected invalidation'),
+    });
+    await next.start();
+    next.setDraft('successor');
+
+    const f = await fixture(t, { controller: first });
+    const firstComposer = f.host.querySelector('textarea');
+    assert.ok(firstComposer);
+    await f.click(recordCommentsLabels.older);
+    assert.equal(f.host.querySelector('textarea'), firstComposer);
+
+    await f.update({ controller: next });
+    const nextComposer = f.host.querySelector('textarea');
+    assert.ok(nextComposer);
+    assert.notEqual(nextComposer, firstComposer);
+    assert.equal(firstComposer.isConnected, false);
+    assert.equal(nextComposer.value, 'successor');
+    await act(async () => pending.resolve(empty));
+    assert.equal(f.host.querySelector('textarea'), nextComposer);
+    assert.equal(nextComposer.value, 'successor');
+});
+
 it('two dialogs give Escape only to the top and restore the original opener after lower unmount', async (t) => {
     const f = await fixture(t);
     const second = createRecordCommentsController({
@@ -605,8 +642,12 @@ it('older-page loading hides the composer and explicit recovery retains its draf
     const f = await fixture(t, { controller });
     f.host.addEventListener('submit', () => submits++);
     await act(async () => controller.setDraft('retained raw draft'));
+    const composer = f.host.querySelector('textarea');
+    assert.ok(composer);
     await f.click(recordCommentsLabels.older);
-    assert.equal(f.host.querySelector('textarea'), null);
+    assert.equal(f.host.querySelector('textarea'), composer);
+    assert.equal(composer.closest('footer')?.hasAttribute('hidden'), true);
+    assert.equal(composer.disabled, true);
     assert.equal(await controller.send(), false);
     await act(async () =>
         older.reject(new Error('Synthetic older-page failure'))
@@ -615,7 +656,9 @@ it('older-page loading hides the composer and explicit recovery retains its draf
         f.host.querySelector('[role=alert]')?.textContent,
         'Synthetic older-page failure'
     );
-    assert.equal(f.host.querySelector('textarea')?.value, 'retained raw draft');
+    assert.equal(f.host.querySelector('textarea'), composer);
+    assert.equal(composer.value, 'retained raw draft');
+    assert.equal(composer.disabled, false);
     assert.equal(reads, 2);
     await f.click(recordCommentsLabels.older);
     const commentBodies = () => [
@@ -652,7 +695,10 @@ it('older-page loading hides the composer and explicit recovery retains its draf
     assert.equal(selection.anchorNode === originalText, true);
     assert.equal(selection.focusNode === originalText, true);
     assert.equal(selection.toString(), gate);
-    assert.equal(f.host.querySelector('textarea')?.value, 'retained raw draft');
+    assert.equal(f.host.querySelector('textarea'), composer);
+    assert.equal(composer.value, 'retained raw draft');
+    assert.equal(composer.closest('footer')?.hasAttribute('hidden'), false);
+    assert.equal(composer.disabled, false);
     assert.equal(controller.getSnapshot().disableSending, false);
     assert.equal(writes, 0);
     assert.equal(submits, 0);

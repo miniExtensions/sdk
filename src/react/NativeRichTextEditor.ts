@@ -61,6 +61,13 @@ type NativeAttachment = {
 };
 type NativeCallbackBinding = { attachment?: NativeAttachment };
 
+type NativeRichTextEditorWithSerializationProps = NativeRichTextEditorProps & {
+    serialization?: {
+        convert: typeof convertEditorValueToStoredRichText;
+        normalize: typeof normalizeRichTextForComparison;
+    };
+};
+
 /** This zero-DOM sibling commits policy before the supplied editor's layout work. */
 function NativeEditorCommit({ commit }: { commit(): void }) {
     useLayoutEffect(commit);
@@ -68,10 +75,14 @@ function NativeEditorCommit({ commit }: { commit(): void }) {
 }
 
 /** Native editor ownership and serialization; no vendor, binding, permissions or text-renderer fallback. */
-export const NativeRichTextEditor = forwardRef<
+export const NativeRichTextEditorWithSerialization = forwardRef<
     NativeRichTextEditorHandle,
-    NativeRichTextEditorProps
+    NativeRichTextEditorWithSerializationProps
 >(function NativeRichTextEditor(props, forwardedRef) {
+    const {
+        convert = convertEditorValueToStoredRichText,
+        normalize = normalizeRichTextForComparison,
+    } = props.serialization ?? {};
     const [focused, setFocused] = useState(false);
     const [editorKey, setEditorKey] = useState(0);
     const [attachedEditor, setAttachedEditor] =
@@ -92,8 +103,7 @@ export const NativeRichTextEditor = forwardRef<
         if (
             previous &&
             previous.value !== props.value &&
-            normalizeRichTextForComparison(props.value) !==
-                normalizeRichTextForComparison(lastSetValueRef.current) &&
+            normalize(props.value) !== normalize(lastSetValueRef.current) &&
             attachment.current
         ) {
             // Retire the old document before a child can flush its update.
@@ -149,13 +159,10 @@ export const NativeRichTextEditor = forwardRef<
     const handleChange = (readValue: () => string) => {
         const admitted = currentProps();
         if (!admitted || admitted.readOnly) return;
-        const stored = convertEditorValueToStoredRichText(readValue());
+        const stored = convert(readValue());
         const current = currentProps();
         if (!current || current.readOnly) return;
-        if (
-            normalizeRichTextForComparison(stored) ===
-            normalizeRichTextForComparison(current.value)
-        ) {
+        if (normalize(stored) === normalize(current.value)) {
             lastSetValueRef.current = current.value;
             return;
         }
@@ -181,16 +188,13 @@ export const NativeRichTextEditor = forwardRef<
     }, [attachedEditor, props.removeStaleEditorRoots]);
 
     useEffect(() => {
-        if (
-            normalizeRichTextForComparison(props.value) !==
-            normalizeRichTextForComparison(lastSetValueRef.current)
-        ) {
+        if (normalize(props.value) !== normalize(lastSetValueRef.current)) {
             lastSetValueRef.current = props.value;
             setEditorKey((key) => key + 1);
         } else if (props.value !== lastSetValueRef.current) {
             lastSetValueRef.current = props.value;
         }
-    }, [props.value]);
+    }, [props.value, normalize]);
 
     const editor = emptyView
         ? null
@@ -235,3 +239,7 @@ export const NativeRichTextEditor = forwardRef<
             : cloneElement(editor!, { key: editorKey })
     );
 });
+
+export const NativeRichTextEditor: React.ForwardRefExoticComponent<
+    NativeRichTextEditorProps & React.RefAttributes<NativeRichTextEditorHandle>
+> = NativeRichTextEditorWithSerialization;

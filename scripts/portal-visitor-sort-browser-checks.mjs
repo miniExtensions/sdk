@@ -338,8 +338,12 @@ let filterFrame = {
             setting: {fieldType: 'singleSelect', type: 'is', idOrName: {type: 'id', id: 'status'}, value: 'red'}}],
     }, {
         id: 'labels', name: 'Labels',
-        operators: [{label: 'Any of', operand: {kind: 'choices', choices: quickChoices},
-            setting: {fieldType: 'multipleSelects', type: 'hasAnyOf', idOrName: {type: 'id', id: 'labels'}, value: []}}],
+        operators: [
+            {label: 'Has any of', operand: {kind: 'choices', choices: quickChoices},
+                setting: {fieldType: 'multipleSelects', type: 'hasAnyOf', idOrName: {type: 'id', id: 'labels'}, value: []}},
+            {label: 'Has all of', operand: {kind: 'choices', choices: quickChoices.slice(0, 3)},
+                setting: {fieldType: 'multipleSelects', type: 'hasAllOf', idOrName: {type: 'id', id: 'labels'}, value: []}},
+        ],
     }, ...dateOperators.map((operator) => ({
         id: operator.setting.idOrName.id, name: operator.label,
         operators: [{...operator, operand: {kind: 'date', dateFormat: 'D/M/YYYY'}}],
@@ -384,6 +388,14 @@ globalThis.filterFixture = {
     seedTitleOperator() {
         const criteria = {logicalOperator: 'and', conditions: [
             {id: 'saved-title', type: 'singleCondition', setting: currentTitle},
+            {id: 'sibling', type: 'singleCondition', setting: dateOperators[0].setting},
+        ]};
+        publishFilter({...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1}, criteria, effectiveSettings: {}});
+        return criteria;
+    },
+    seedChoiceOperator(value) {
+        const criteria = {logicalOperator: 'and', conditions: [
+            {id: 'saved-labels', type: 'singleCondition', setting: {fieldType: 'multipleSelects', type: 'hasAnyOf', idOrName: {type: 'id', id: 'labels'}, value}},
             {id: 'sibling', type: 'singleCondition', setting: dateOperators[0].setting},
         ]};
         publishFilter({...filterFrame, stamp: {...filterFrame.stamp, generation: filterFrame.stamp.generation + 1}, criteria, effectiveSettings: {}});
@@ -804,6 +816,69 @@ async function checkFilter(page) {
     });
     assert.equal(afterOperatorChange.outcomes.at(-1).type, 'allocated');
     assert.equal(afterOperatorChange.submits, 0);
+
+    const choiceRow = dialog.locator('li').first();
+    const choiceOperator = choiceRow.getByRole('combobox', {
+        name: 'Operator',
+    });
+    const choiceValue = choiceRow.getByRole('listbox', { name: 'Value' });
+    const selectedLabels = () =>
+        choiceValue.evaluate((select) =>
+            Array.from(select.selectedOptions, (option) => option.text)
+        );
+    const validChoices = ['Blue', 'Red'];
+    const validSeed = await page.evaluate(() =>
+        globalThis.filterFixture.seedChoiceOperator(['blue', 'red'])
+    );
+    const beforeChoices = await summary();
+    await open();
+    assert.equal(await choiceOperator.inputValue(), 'hasAnyOf');
+    assert.deepEqual((await selectedLabels()).sort(), validChoices);
+    await choiceOperator.selectOption('hasAllOf');
+    assert.deepEqual((await selectedLabels()).sort(), validChoices);
+    await choiceOperator.selectOption('hasAnyOf');
+    assert.deepEqual((await selectedLabels()).sort(), validChoices);
+    assert.deepEqual((await summary()).commands, beforeChoices.commands);
+    await done.press('Enter');
+    await closed(beforeChoices.outcomes.length + 1);
+    assert.deepEqual((await summary()).commands, beforeChoices.commands);
+    assert.deepEqual((await summary()).outcomes.at(-1), { type: 'unchanged' });
+
+    const assertChoiceCommit = async (seed, labels, orderedIds) => {
+        const before = await summary();
+        await open();
+        await choiceOperator.selectOption('hasAllOf');
+        assert.deepEqual((await selectedLabels()).sort(), labels);
+        assert.deepEqual((await summary()).commands, before.commands);
+        assert.equal((await summary()).submits, 0);
+        await done.press('Enter');
+        await closed(before.outcomes.length + 1);
+        const after = await summary();
+        const [condition, sibling] = seed.conditions;
+        assert.equal(after.commands.length, before.commands.length + 1);
+        assert.deepEqual(after.commands.at(-1).criteria, {
+            ...seed,
+            conditions: [
+                {
+                    ...condition,
+                    setting: {
+                        ...condition.setting,
+                        type: 'hasAllOf',
+                        value: orderedIds,
+                    },
+                },
+                sibling,
+            ],
+        });
+        assert.equal(after.outcomes.at(-1).type, 'allocated');
+        assert.equal(after.submits, 0);
+    };
+    await assertChoiceCommit(validSeed, validChoices, ['blue', 'red']);
+    const invalidSeed = await page.evaluate(() =>
+        globalThis.filterFixture.seedChoiceOperator(['blue', 'yellow'])
+    );
+    await assertChoiceCommit(invalidSeed, [], []);
+
     await page.evaluate(() => globalThis.filterFixture.unmount());
     assert.equal((await summary()).listeners, 0);
     return {
@@ -818,6 +893,7 @@ async function checkFilter(page) {
         heldQuick,
         date,
         textOperatorRetainedOperand: true,
+        choiceOperatorRetainedOperand: true,
         focusRestored: true,
         cleanup: 'completed',
     };

@@ -450,7 +450,7 @@ export async function checkCompleteDateBrowser({
             body.style.font = '16px/1.5 Arial, sans-serif';
             body.style.color = 'rgb(2, 8, 23)';
         });
-        await page.getByRole('cell', { name: '10:30', exact: true }).click();
+        await dayPopup.locator('.rdtTimeToggle').click();
         const timePanel = await dayPopup.evaluate((node) => {
             const style = getComputedStyle(node);
             return {
@@ -560,6 +560,56 @@ export async function checkCompleteDateBrowser({
             '1'
         );
         await finish('datetime-enter-explicit-save');
+
+        input = await open('datetime');
+        await page.evaluate(() =>
+            window.dateProof.change({ value: '2024-07-02T14:30:00.000Z' })
+        );
+        assert.equal(await input.inputValue(), '2024-07-02 10:30');
+        await input.focus();
+        await dayPopup.waitFor();
+        await page.keyboard.press('Tab');
+        const adjustTime = dayPopup.getByRole('button', {
+            name: 'Adjust time',
+            exact: true,
+        });
+        assert.equal(
+            await page.evaluate(() =>
+                document.activeElement?.getAttribute('aria-label')
+            ),
+            'Adjust time',
+            'Tab from Appointment reaches the time-panel button'
+        );
+        assert(
+            await adjustTime.evaluate((node) => node === document.activeElement)
+        );
+        await page.keyboard.press('Enter');
+        const timeActions = [
+            'Increase hour',
+            'Decrease hour',
+            'Increase minute',
+            'Decrease minute',
+        ];
+        const beforeKeyboard = await snapshot();
+        assert.deepEqual(beforeKeyboard.writes, []);
+        for (const [index, name] of timeActions.entries()) {
+            const action = dayPopup.getByRole('button', { name, exact: true });
+            assert(
+                await action.evaluate((node) => node === document.activeElement)
+            );
+            if (index === 0) await page.keyboard.press('Space');
+            if (index < timeActions.length - 1)
+                await page.keyboard.press('Tab');
+        }
+        assert.equal(await input.inputValue(), '2024-07-02 11:30');
+        assert.deepEqual((await snapshot()).writes, [
+            { value: '2024-07-02T15:30:00.000Z', writer: 'first' },
+        ]);
+        await page.keyboard.press('Escape');
+        await dayPopup.waitFor({ state: 'detached' });
+        assert(await input.evaluate((node) => node === document.activeElement));
+        assert.deepEqual((await snapshot()).saves, []);
+        await finish('datetime-keyboard-adjust');
 
         input = await open('dialog');
         await input.click();

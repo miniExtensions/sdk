@@ -547,6 +547,49 @@ it('commits a blank DateTime day at midnight, edits real time counters and clear
     assert.equal(f.writes.at(-1), null);
 });
 
+it('suppresses key repeat on a mounted DateTime counter and writes once for a fresh press', async (t) => {
+    const f = await fixture(t, {
+        value: '2024-07-02T14:30:00.000Z',
+        airtableDateConfig: {
+            ...datetime,
+            options: { ...datetime.options, timeZone: 'America/New_York' },
+        },
+    });
+    await f.open();
+    const tab = await f.key('Tab');
+    assert.equal(tab.defaultPrevented, true);
+    const opener = f.window.document.activeElement;
+    assert.equal(opener?.getAttribute('aria-label'), 'Adjust time');
+    assert.ok(opener);
+    await act(async () => {
+        opener.dispatchEvent(
+            new f.window.KeyboardEvent('keydown', {
+                key: 'Enter',
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+    });
+    const increase = f.window.document.activeElement;
+    assert.equal(increase?.getAttribute('aria-label'), 'Increase hour');
+    assert.ok(increase);
+    const pressSpace = async (repeat: boolean) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: ' ',
+            repeat,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => increase.dispatchEvent(event));
+        assert.equal(event.defaultPrevented, true);
+    };
+    await pressSpace(true);
+    assert.deepEqual(f.writes, []);
+    await pressSpace(false);
+    assert.deepEqual(f.writes, ['2024-07-02T15:30:00.000Z']);
+    assert.equal(f.input().value, '2024-07-02 11:30');
+});
+
 it('navigates actual year/month controls without an early commit and can interrupt and reopen in days', async (t) => {
     const f = await fixture(t, { value: '2025-02-01' });
     await f.open();

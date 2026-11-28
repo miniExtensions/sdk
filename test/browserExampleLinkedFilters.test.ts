@@ -605,6 +605,61 @@ describe('actual starter linked finder admission', () => {
             assert.deepEqual(api.unexpected, []);
         });
 
+    for (const sameCaption of [false, true])
+        it(`renders each ID once across overlapping finder pages with ${sameCaption ? 'shared' : 'distinct'} captions`, async (test) => {
+            const api = fixture(finderForm('list'));
+            api.handlers.options = async (request) => {
+                const response = options(request.offset ? null : 'cursor_next');
+                if (sameCaption)
+                    for (const record of response.records)
+                        record.fields.fld_project_name = 'Same project';
+                return response;
+            };
+            const window = await environment(test, api.fetch);
+            const checkboxes = () => [
+                ...outer(window).querySelectorAll(
+                    '.choice-list input[type="checkbox"]'
+                ),
+            ];
+
+            await searchOptions(window);
+            const firstPage = checkboxes();
+            assert.equal(firstPage.length, 2);
+            if (sameCaption)
+                assert.deepEqual(
+                    firstPage.map((input) =>
+                        input.closest('label')?.textContent?.trim()
+                    ),
+                    ['Same project', 'Same project']
+                );
+            const more = button(outer(window), 'More choices');
+            more.click();
+            await waitFor(() => api.reads.length === 2 && idle(window));
+            assert.equal(api.reads[1]?.offset, 'cursor_next');
+            const secondPage = checkboxes();
+            assert.equal(secondPage.length, 2);
+            const [retained, available] = secondPage;
+            assert(retained instanceof window.HTMLInputElement);
+            assert(available instanceof window.HTMLInputElement);
+            assert.ok(retained === firstPage[0] && available === firstPage[1]);
+            assert.equal(retained.checked, true);
+            assert.equal(available.checked, false);
+            assert(more instanceof window.HTMLButtonElement);
+            assert.equal(more.disabled, true);
+
+            available.checked = true;
+            change(window, available);
+            const selected = ['rec_retained', 'rec_available'];
+            assert.deepEqual(rawIds(window), selected);
+            assert.equal(api.saves.length, 0);
+            await save(window, api.saves);
+            assert.deepEqual(
+                api.saves.map(({ formRecord }) => formRecord.data.fld_projects),
+                [selected]
+            );
+            assert.deepEqual(api.unexpected, []);
+        });
+
     for (const mode of ['calendar', null, 'unknown-finder'])
         it(`does not silently turn unsupported ${String(mode)} into list search`, async (test) => {
             const api = fixture(finderForm(mode));

@@ -4670,7 +4670,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
                 consumerDirectory: temporaryDirectory,
             });
-            assert.equal(formSaveIdentityProof, 34);
+            assert.equal(formSaveIdentityProof, 36);
             console.log(
                 `Installed Form Save response identity: ${formSaveIdentityProof} ESM/CJS checkpoints passed; synthetic transport only.`
             );
@@ -5122,7 +5122,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(visitorQueryProof.tests, 380);
+    assert.equal(visitorQueryProof.tests, 384);
     console.log(
         'Installed Portal visitor Sort, Search, view buttons and quick/advanced Filter qualification passed.',
         visitorQueryProof

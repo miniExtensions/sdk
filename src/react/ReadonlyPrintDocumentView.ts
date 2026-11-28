@@ -1,4 +1,4 @@
-import { createElement as h, useId, type ReactNode } from 'react';
+import { createElement as h, Fragment, useId, type ReactNode } from 'react';
 import {
     captureReadonlyPrintDocument,
     type ReadonlyPrintCapture,
@@ -468,6 +468,10 @@ function Field({
     context: Context;
     path: string;
 }): ReactNode {
+    const diagramUrl =
+        field.description?.placement === 'tooltip'
+            ? field.description.imageUrl?.trim()
+            : null;
     return h(CompleteFormFieldPresentation, {
         title: field.title,
         fieldName: field.fieldName,
@@ -489,12 +493,26 @@ function Field({
         error: field.error,
         className: 'mx-sdk-print-field',
         children: (composition) =>
-            h(Facet, {
-                facet: field.facet,
-                context: { ...context, semanticTitle: field.semanticTitle },
-                path,
-                composition,
-            }),
+            h(
+                Fragment,
+                null,
+                diagramUrl
+                    ? h(RecoverableImage, {
+                          className:
+                              'mx-sdk-field-description-image mx-sdk-print-tooltip-image',
+                          sources: [diagramUrl],
+                          alt: '',
+                          loading: 'lazy',
+                          renderFallback: () => null,
+                      })
+                    : null,
+                h(Facet, {
+                    facet: field.facet,
+                    context: { ...context, semanticTitle: field.semanticTitle },
+                    path,
+                    composition,
+                })
+            ),
     });
 }
 

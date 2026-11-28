@@ -1,5 +1,8 @@
-import type { MiniExtensionsClient } from '../runtime/types.js';
-import type { FormLoadedResult } from '../runtime/types.js';
+import type {
+    AirtableValue,
+    FormLoadedResult,
+    MiniExtensionsClient,
+} from '../runtime/types.js';
 import type { FormFieldBindings } from './bindings.js';
 import {
     checkFormAttachmentFiles,
@@ -47,7 +50,7 @@ export type FormAttachmentController = {
     /** Activity-only guard; does not evaluate field presentation. */
     blocksForm(): boolean;
     subscribe(listener: (snapshot: FormAttachmentSnapshot) => void): () => void;
-    /** Replace the pending queue; no upload. Empty chooser completion preserves it. */
+    /** Queue the admitted files without uploading. Empty chooser completion preserves the queue. */
     select(files: readonly File[]): boolean;
     clear(): void;
     /** Remove one native occurrence locally; never deletes remote bytes or clears pending Files. */
@@ -289,6 +292,18 @@ export function createFormAttachmentController(
         stopBinding();
     };
     if (retired) stop();
+    const selectionError =
+        'These files cannot be added with the current Form settings.';
+    const checkFiles = (
+        candidates: readonly File[],
+        value: AirtableValue | undefined
+    ) =>
+        checkFormAttachmentFiles({
+            loaded: policyLoaded(),
+            fieldId,
+            value,
+            files: candidates,
+        });
     const admission = (candidates: readonly File[]) => {
         if (
             !current() ||
@@ -296,27 +311,15 @@ export function createFormAttachmentController(
             active !== null ||
             !binding.getSnapshot().canEdit
         )
-            return false;
+            return null;
         const state = form.controller.getState();
         if (
             state.status !== 'ready' &&
             state.status !== 'validation-error' &&
             state.status !== 'saved'
         )
-            return false;
-        const loaded = policyLoaded();
-        const check = checkFormAttachmentFiles({
-            loaded,
-            fieldId,
-            value: state.draft!.data[fieldId],
-            files: candidates,
-        });
-        return (
-            check.batchError === null &&
-            candidates.every((_, index) =>
-                check.acceptedIndexes.includes(index)
-            )
-        );
+            return null;
+        return checkFiles(candidates, state.draft!.data[fieldId]);
     };
     return {
         blocksForm() {
@@ -352,36 +355,32 @@ export function createFormAttachmentController(
                 )
                     return false;
                 // A replacement during a flight is queued only; it cannot change that flight's captured File.
-                if (active === null && !admission(next)) {
-                    error =
-                        'These files cannot be added with the current Form settings.';
-                    emit();
+                const check =
+                    active === null
+                        ? admission(next)
+                        : checkFiles(
+                              next,
+                              form.controller.getState().draft!.data[fieldId]
+                          );
+                if (
+                    check == null ||
+                    check.batchError !== null ||
+                    check.acceptedIndexes.length === 0
+                ) {
+                    if (active === null) {
+                        error = selectionError;
+                        emit();
+                    }
                     return false;
                 }
-                if (active !== null) {
-                    const check = checkFormAttachmentFiles({
-                        loaded: policyLoaded(),
-                        fieldId,
-                        value: form.controller.getState().draft!.data[fieldId],
-                        files: next,
-                    });
-                    if (
-                        check.batchError !== null ||
-                        !next.every((_, index) =>
-                            check.acceptedIndexes.includes(index)
-                        )
-                    )
-                        return false;
-                }
-                files = [...next];
+                files = check.acceptedIndexes.map((index) => next[index]!);
                 revision++;
-                error = null;
+                error = check.rejected.length > 0 ? selectionError : null;
                 if (active === null && !blocked()) phase = 'selected';
                 emit();
                 return true;
             } catch {
-                error =
-                    'These files cannot be added with the current Form settings.';
+                error = selectionError;
                 emit();
                 return false;
             }
@@ -426,7 +425,13 @@ export function createFormAttachmentController(
             if (selected == null || attempted.has(selected)) return false;
             let native;
             try {
-                if (!admission([selected])) return false;
+                const check = admission([selected]);
+                if (
+                    check == null ||
+                    check.batchError !== null ||
+                    check.acceptedIndexes[0] !== 0
+                )
+                    return false;
                 native = form.controller.getState();
                 admittedAttachmentValues(
                     policyLoaded(),

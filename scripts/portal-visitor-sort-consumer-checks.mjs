@@ -111,6 +111,7 @@ const props: PortalVisitorViewButtonsProps = {
     selectedViewId: null,
     ownerToken: 'admitted view owner',
     unnamedViewLabel: 'Localized unnamed view',
+    viewBadgeDescription: 'Localized flagged view',
     onSelect(id) { void id.toUpperCase(); },
 };
 // @ts-expect-error metadata published to the chooser is read-only.
@@ -129,7 +130,7 @@ function checkVisitorMatrix({ archivePath, typescriptBin }, includeQuery) {
               queryCase,
           ]
         : sortCases;
-    const expectedTests = includeQuery ? 95 : 16;
+    const expectedTests = includeQuery ? 96 : 16;
     const fixtures = includeQuery ? [fixture, quickFilterFixture] : [fixture];
     const output = [];
     for (const [react, types, domTypes] of profiles) {

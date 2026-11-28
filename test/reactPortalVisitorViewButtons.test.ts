@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { Window } from 'happy-dom';
+import { Window, type HTMLButtonElement } from 'happy-dom';
 import { act, createElement as h, StrictMode } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
@@ -46,6 +46,40 @@ it('renders the host order, selection, localized fallback and decorative badge o
         ),
         ''
     );
+});
+
+it('describes only flagged views and preserves the focused button when its flag changes', async (t) => {
+    const fixture = await htmlPresentationFixture(t);
+    const render = (showBadge: boolean, viewBadgeDescription?: string) =>
+        fixture.render(
+            h(PortalVisitorViewButtons, {
+                ...defaultProps,
+                views: [views[0], { ...views[1], showBadge }],
+                selectedViewId: 'list',
+                viewBadgeDescription,
+            })
+        );
+    const describe = (button: HTMLButtonElement) => {
+        const id = button.getAttribute('aria-describedby');
+        return id == null
+            ? null
+            : fixture.window.document.getElementById(id)?.textContent;
+    };
+    await render(true);
+    const [clear, flagged] = fixture.container.querySelectorAll('button');
+    assert.equal(describe(clear), null);
+    assert.equal(describe(flagged), 'Flagged view');
+    assert.equal(flagged.querySelectorAll('[aria-hidden="true"]').length, 1);
+    await act(async () => flagged.focus());
+    await render(true, 'Vue signalée');
+    assert.equal(describe(flagged), 'Vue signalée');
+    await render(false, 'Vue signalée');
+    assert.equal(describe(flagged), null);
+    assert.equal(flagged.querySelectorAll('[aria-hidden="true"]').length, 0);
+    assert.equal(fixture.container.querySelectorAll('button')[1], flagged);
+    assert.equal(fixture.window.document.activeElement, flagged);
+    assert.equal(flagged.textContent, 'Vue sans nom');
+    assert.equal(flagged.getAttribute('aria-pressed'), 'true');
 });
 
 it('waits for the host to publish selection and sends one intent from its own root', async (t) => {

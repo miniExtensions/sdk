@@ -26,6 +26,7 @@ export default function FieldTooltipPopup(props: {
     admitDescription?: () => boolean;
     keepOpenOnAnchorInteraction?: boolean;
     gridHeaderKeyboard?: boolean;
+    formHelpKeyboard?: (anchor: HTMLButtonElement) => boolean;
     className?: string;
     children?: ReactNode;
 }): ReactElement | null {
@@ -46,7 +47,7 @@ export default function FieldTooltipPopup(props: {
         if (!admitted) props.onOpenChange(false);
     }, [admitted, props.onOpenChange]);
     if (!admitted) return null;
-    const leaveGridHeaderHelp = (event: KeyboardEvent<HTMLDivElement>) => {
+    const leaveTooltipHelp = (event: KeyboardEvent<HTMLDivElement>) => {
         if (
             event.key !== 'Tab' ||
             event.altKey ||
@@ -56,11 +57,21 @@ export default function FieldTooltipPopup(props: {
         )
             return;
         const anchor = props.anchorRef.current;
+        if (
+            !anchor ||
+            (!props.gridHeaderKeyboard && !props.formHelpKeyboard?.(anchor))
+        )
+            return;
         const controls = fieldHelpTabStops(event.currentTarget);
         const boundary = event.shiftKey ? controls[0] : controls.at(-1);
-        if (!anchor || event.target !== boundary) return;
-        event.stopPropagation();
+        if (event.target !== boundary) return;
         anchor.focus({ preventScroll: true });
+        if (
+            !props.gridHeaderKeyboard &&
+            anchor.ownerDocument.activeElement !== anchor
+        )
+            return;
+        event.stopPropagation();
         if (event.shiftKey) {
             event.preventDefault();
         } else {
@@ -83,9 +94,10 @@ export default function FieldTooltipPopup(props: {
                 onCloseAutoFocus: (event: Event) => event.preventDefault(),
                 onMouseEnter: props.onMouseEnter,
                 onMouseLeave: props.onMouseLeave,
-                onKeyDownCapture: props.gridHeaderKeyboard
-                    ? leaveGridHeaderHelp
-                    : undefined,
+                onKeyDownCapture:
+                    props.gridHeaderKeyboard || props.formHelpKeyboard
+                        ? leaveTooltipHelp
+                        : undefined,
                 onEscapeKeyDown: () => {
                     const anchor = props.anchorRef.current;
                     const document = anchor?.ownerDocument;

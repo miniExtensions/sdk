@@ -48,6 +48,7 @@ async function mount(t: TestContext, node: ReactNode) {
         'Element',
         'Node',
         'MutationObserver',
+        'getComputedStyle',
         'IS_REACT_ACT_ENVIRONMENT',
     ] as const;
     const originals = keys.map((key) =>
@@ -60,7 +61,9 @@ async function mount(t: TestContext, node: ReactNode) {
             value:
                 key === 'IS_REACT_ACT_ENVIRONMENT'
                     ? true
-                    : window[key as keyof Window],
+                    : key === 'getComputedStyle'
+                      ? window.getComputedStyle.bind(window)
+                      : window[key as keyof Window],
         });
     const { createRoot } = await import('react-dom/client');
     const container = window.document.createElement('div');
@@ -207,6 +210,68 @@ test('same-count config replacement updates chrome, order, errors, semantic iden
             ?.classList.contains('mx-sdk-field-sr-only'),
         true
     );
+});
+
+test('omits a failed print-only diagram and keeps preview help out of Form Tab traversal', async (t) => {
+    const document = doc({
+        ...field('instructions', text('Retained answer'), 'Instructions'),
+        description: {
+            html: '<p>Read the <a href="#guide">guide</a>.</p>',
+            imageUrl: 'https://example.test/diagram.svg',
+            placement: 'tooltip',
+            truncate: false,
+        },
+    });
+    const f = await mount(
+        t,
+        h('form', null, h(ReadonlyPrintDocumentView, { document }))
+    );
+    const diagram = f.container.querySelector('.mx-sdk-print-tooltip-image');
+    assert.equal(
+        diagram?.getAttribute('src'),
+        'https://example.test/diagram.svg'
+    );
+    await act(async () => diagram?.dispatchEvent(new f.window.Event('error')));
+    assert.equal(
+        f.container.querySelector('.mx-sdk-print-tooltip-image'),
+        null
+    );
+    assert.match(f.container.textContent ?? '', /Retained answer/);
+    assert.equal(f.container.querySelector('[role="status"]'), null);
+
+    const trigger = f.container.querySelector(
+        'button.mx-sdk-field-tooltip-trigger'
+    );
+    assert.ok(trigger instanceof f.window.HTMLButtonElement);
+    assert.equal(trigger.form, f.container.querySelector('form'));
+    await act(async () => trigger.focus());
+    const tooltip = f.window.document.querySelector('[role="tooltip"]');
+    assert.ok(tooltip instanceof f.window.HTMLElement);
+    const guide = tooltip.querySelector('a[href="#guide"]');
+    assert.ok(guide instanceof f.window.HTMLAnchorElement);
+    guide.style.visibility = 'visible';
+    Object.defineProperty(guide, 'getClientRects', {
+        value: () => [guide.getBoundingClientRect()],
+    });
+    const tab = new f.window.KeyboardEvent('keydown', {
+        key: 'Tab',
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => trigger.dispatchEvent(tab));
+    assert.equal(tab.defaultPrevented, false);
+    assert.equal(f.window.document.activeElement, trigger);
+
+    await act(async () => {
+        tooltip.dispatchEvent(
+            new f.window.MouseEvent('mouseout', {
+                bubbles: true,
+                relatedTarget: f.container,
+            })
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 180));
+    });
+    assert.equal(f.window.document.querySelector('[role="tooltip"]'), null);
 });
 
 test('admitted physical and rich facts preserve readonly formatting, literal labels and resource policy', async (t) => {

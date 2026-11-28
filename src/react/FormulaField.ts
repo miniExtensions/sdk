@@ -19,6 +19,7 @@ import {
     type CompleteReadOnlyTextFieldProps,
 } from './CompleteReadOnlyTextField.js';
 import {
+    GridFormulaAttachmentNames,
     ReadOnlyURLGallery,
     type ReadOnlyURLGalleryProps,
 } from './ReadOnlyURLGallery.js';
@@ -139,13 +140,18 @@ export function ControlledFormulaField(
         content =
             typeof props.value !== 'string'
                 ? formulaError(unexpectedFormula)
-                : createElement(ReadOnlyURLGallery, {
-                      ...props.gallery,
-                      entries: props.gallery?.entries ?? [],
-                      owner: props.gallery?.owner ?? props.resource?.owner,
-                      identity:
-                          props.gallery?.identity ?? props.resource?.identity,
-                  });
+                : createElement(
+                      GridFormulaAttachmentNames.Provider,
+                      { value: props.gallery?.isInGrid === true },
+                      createElement(ReadOnlyURLGallery, {
+                          ...props.gallery,
+                          entries: props.gallery?.entries ?? [],
+                          owner: props.gallery?.owner ?? props.resource?.owner,
+                          identity:
+                              props.gallery?.identity ??
+                              props.resource?.identity,
+                      })
+                  );
     } else if (props.displayAsButton) {
         content = createElement(SingleLineTextField, {
             mode: 'readOnly',

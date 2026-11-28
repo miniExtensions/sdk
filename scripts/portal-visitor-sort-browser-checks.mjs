@@ -10,6 +10,7 @@ import {
 import { createServer } from 'node:http';
 import { basename, join, resolve } from 'node:path';
 import { build } from 'esbuild';
+import { expect } from 'playwright/test';
 import { assertBrowserInputs } from './package-checks.mjs';
 
 const dateFilterContext = {
@@ -254,11 +255,12 @@ let ownerToken = 1;
 const intents = [];
 const otherIntents = [];
 let visible = choices;
+let viewBadgeDescription;
 function renderViews() {
     viewRoot.render(h(StrictMode, null, h(PortalVisitorViewButtons, {
         views: visible, selectedViewId: selection, ownerToken,
         testId: 'view-owner-' + ownerToken,
-        unnamedViewLabel: 'Vue sans nom', groupLabel: 'Primary views',
+        unnamedViewLabel: 'Vue sans nom', groupLabel: 'Primary views', viewBadgeDescription,
         onSelect(id) {
             intents.push(id);
             selection = id;
@@ -275,6 +277,11 @@ renderViews();
 globalThis.viewButtonsFixture = {
     summary: () => ({ intents, otherIntents, submits }),
     narrow(n) { visible = choices.slice(0, n); renderViews(); },
+    setBadge(showBadge, description) {
+        visible = visible.map((view) => view.id === 'grid' ? {...view, showBadge} : view);
+        viewBadgeDescription = description;
+        renderViews();
+    },
     replaceOwner(token) { ownerToken = token; renderViews(); },
     unmount() { viewRoot.unmount(); otherViewRoot.unmount(); },
 };
@@ -816,7 +823,7 @@ async function checkFilter(page) {
     };
 }
 
-async function checkViewButtons(page) {
+async function checkViewButtons(page, evidence) {
     const root = page.getByRole('group', { name: 'Primary views' });
     const other = page.getByRole('group', { name: 'Other views' });
     await root.waitFor();
@@ -905,6 +912,56 @@ async function checkViewButtons(page) {
         await second.evaluate((button) => button === document.activeElement),
         true
     );
+    const badge = second.locator('.me-portal-visitor-view-button__badge');
+    const original = await second.elementHandle();
+    const beforeBadgeUpdates = await summary();
+    const verifyBadge = async (description) => {
+        await expect(second).toHaveAccessibleName('Vue sans nom');
+        await expect(second).toHaveAccessibleDescription(description);
+        await expect(badge).toHaveCount(description === '' ? 0 : 1);
+        assert.equal(await second.getAttribute('aria-pressed'), 'true');
+        assert.equal(
+            await second.evaluate(
+                (button, originalButton) =>
+                    button === originalButton &&
+                    button === document.activeElement,
+                original
+            ),
+            true
+        );
+    };
+    const setBadge = (showBadge, description) =>
+        page.evaluate(
+            ({ showBadge, description }) =>
+                globalThis.viewButtonsFixture.setBadge(showBadge, description),
+            { showBadge, description }
+        );
+    const descriptions = {
+        default: 'Flagged view',
+        cleared: '',
+        localized: 'Vue signalée',
+    };
+    try {
+        await verifyBadge(descriptions.default);
+        await setBadge(false);
+        await verifyBadge(descriptions.cleared);
+        await setBadge(true, descriptions.localized);
+        await verifyBadge(descriptions.localized);
+        await expect(first).toHaveAccessibleDescription('');
+        await expect(
+            other.getByRole('button', { name: 'Vue sans nom', exact: true })
+        ).toHaveAccessibleDescription(descriptions.default);
+        assert.deepEqual(await summary(), beforeBadgeUpdates);
+        evidence.viewButtonBadges = {
+            descriptions,
+            sameFocusedButton: true,
+            pressed: true,
+            callbacks: 0,
+        };
+    } finally {
+        await original.dispose();
+    }
+
     await page.keyboard.press('Space');
     assert.deepEqual((await summary()).intents, ['grid']);
     await page.keyboard.press('Tab');
@@ -1323,7 +1380,7 @@ export async function checkPortalVisitorSortBrowser({
         });
         await page.goto(origin);
         if (includeViewButtons)
-            evidence.viewButtons = await checkViewButtons(page);
+            evidence.viewButtons = await checkViewButtons(page, evidence);
         const summary = () =>
             page.evaluate(() => globalThis.sortFixture.summary());
         const trigger = page.getByRole('button', { name: 'Sort', exact: true });

@@ -5,6 +5,12 @@
     height: 100%;
     min-height: 12rem;
 }
+.mx-sdk-portal-map-marker:has(
+    > .mx-sdk-portal-map-card > .mx-sdk-portal-map-open:focus-visible
+) {
+    position: relative;
+    z-index: 1;
+}
 .mx-sdk-portal-map-card {
     position: relative;
     max-width: 20rem;

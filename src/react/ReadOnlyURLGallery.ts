@@ -1,9 +1,12 @@
 import {
+    createContext,
     createElement as h,
+    useContext,
     useEffect,
     useLayoutEffect,
     useRef,
     useState,
+    type Context,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
@@ -79,6 +82,8 @@ const defaults: ReadOnlyURLGalleryLabels = {
     empty: 'No Value',
     downloadFailed: 'Could not download attachment',
 };
+export const GridFormulaAttachmentNames: Context<boolean> =
+    createContext(false);
 const stop = (event: SyntheticEvent) => event.stopPropagation();
 const contain = (event: SyntheticEvent) => {
     event.preventDefault();
@@ -264,6 +269,7 @@ function replacementIndex(
 
 /** Readonly collection presentation. Selection is local; resources stay explicit. */
 export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
+    const useNumberedNames = useContext(GridFormulaAttachmentNames);
     const selectionOwner = props.selectionOwner ?? props.owner;
     const generation = resourceOwnerGeneration(selectionOwner);
     const resourceGeneration = resourceOwnerGeneration(props.owner);
@@ -464,7 +470,9 @@ export function ReadOnlyURLGallery(props: ReadOnlyURLGalleryProps): ReactNode {
                                 ? h(
                                       ActionButton,
                                       {
-                                          'aria-label': item.url,
+                                          'aria-label': useNumberedNames
+                                              ? `${labels.openAttachment} ${index + 1}`
+                                              : item.url,
                                           className: 'mx-sdk-url-gallery__open',
                                           onClick: (event: SyntheticEvent) => {
                                               contain(event);

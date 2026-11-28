@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { Window, type Event as ResourceBoundaryEvent } from 'happy-dom';
+import {
+    Window,
+    type Element as DOMElement,
+    type Event as ResourceBoundaryEvent,
+} from 'happy-dom';
 import { act, createElement as h, StrictMode, useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import type { CompleteFormFieldPresentationProps } from '../src/react/CompleteFormFieldPresentation.js';
@@ -386,6 +390,62 @@ it('retains the tooltip description without an invisible help link in the tab or
     f.unchangedEffects();
 });
 
+it('enters Form help links and restores the owned trigger at both Tab boundaries', async (t) => {
+    const f = await fixture(t);
+    const help = {
+        description: '<p>Read <a href="#guide">Guide</a></p>',
+        descriptionPlacement: 'tooltip',
+    } as const;
+    await f.render(shell(help));
+    const button = trigger(f);
+    assert.equal(button.form, f.container);
+    const popup = () =>
+        f.window.document.body.querySelector('[role="tooltip"]');
+    const focusTrigger = async () => {
+        await act(async () => {
+            button.focus();
+            await import('../src/react/fieldTooltipPopup.js');
+        });
+        assert.equal(f.window.document.activeElement, button);
+        const link = popup()?.querySelector('a[href="#guide"]');
+        assert.ok(link instanceof f.window.HTMLAnchorElement);
+        // The synthetic DOM does not provide link layout or native Tab.
+        Object.defineProperty(link, 'getClientRects', { value: () => [{}] });
+        link.style.visibility = 'visible';
+        return link;
+    };
+    const tab = async (shiftKey = false) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () =>
+            f.window.document.activeElement?.dispatchEvent(event)
+        );
+        return event.defaultPrevented;
+    };
+
+    const link = await focusTrigger();
+    assert.equal(await tab(), true);
+    assert.equal(f.window.document.activeElement, link);
+    assert.equal(await tab(true), true);
+    assert.equal(f.window.document.activeElement, button);
+    assert.equal(await tab(), true);
+    assert.equal(f.window.document.activeElement, link);
+    assert.equal(await tab(), false);
+    assert.equal(f.window.document.activeElement, button);
+    assert.equal(popup(), null);
+
+    await act(async () => textarea(f).focus());
+    await f.render(shell({ ...help, preview: true }));
+    await focusTrigger();
+    assert.equal(await tab(), false);
+    assert.equal(f.window.document.activeElement, button);
+    f.unchangedEffects();
+});
+
 it('dismisses a hovered portal tooltip with Escape while the real textarea keeps focus', async (t) => {
     const f = await fixture(t);
     await f.render(
@@ -437,6 +497,61 @@ it('dismisses a hovered portal tooltip with Escape while the real textarea keeps
         f.window.document.body.querySelector('[role="tooltip"]'),
         null
     );
+    assert.equal(f.window.document.activeElement, control);
+    f.unchangedEffects();
+});
+
+it('keeps hovered Form help open across the pointer gap and closes after leaving', async (t) => {
+    const f = await fixture(t);
+    await f.render(
+        shell({
+            description: '<p>Hover guidance</p>',
+            descriptionPlacement: 'tooltip',
+        })
+    );
+    const control = textarea(f);
+    const button = trigger(f);
+    const popup = () =>
+        f.window.document.body.querySelector('[role="tooltip"]');
+    const movePointer = (from: DOMElement, to: DOMElement) =>
+        act(async () => {
+            from.dispatchEvent(
+                new f.window.MouseEvent('mouseout', {
+                    bubbles: true,
+                    relatedTarget: to,
+                })
+            );
+            to.dispatchEvent(
+                new f.window.MouseEvent('mouseover', {
+                    bubbles: true,
+                    relatedTarget: from,
+                })
+            );
+        });
+    await act(async () => control.focus());
+    await movePointer(control, button);
+    const openedHelp = popup();
+    assert.ok(openedHelp);
+    assert.equal(f.container.contains(openedHelp), false);
+
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+        await movePointer(button, control);
+        await act(async () => t.mock.timers.tick(100));
+        assert.equal(popup(), openedHelp);
+        await movePointer(control, openedHelp);
+        await act(async () => t.mock.timers.tick(150));
+        assert.equal(popup(), openedHelp);
+
+        await movePointer(openedHelp, control);
+        await act(async () => t.mock.timers.tick(149));
+        assert.equal(popup(), openedHelp);
+        await act(async () => t.mock.timers.tick(1));
+        assert.equal(popup(), null);
+    } finally {
+        t.mock.timers.reset();
+    }
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
     assert.equal(f.window.document.activeElement, control);
     f.unchangedEffects();
 });

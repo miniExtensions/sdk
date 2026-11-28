@@ -255,7 +255,14 @@ export function CompleteFormFieldPresentation(
                       : null
               );
     const tooltipId = `${association.controlId}-tooltip`;
-    const enterGridHeaderHelp = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const formHelpKeyboard = (anchor: HTMLButtonElement) =>
+        props.preview !== true &&
+        !anchor.closest('[data-mx-print-document]') &&
+        (anchor.form != null ||
+            (association.formId != null &&
+                anchor.ownerDocument.getElementById(association.formId)
+                    ?.tagName === 'FORM'));
+    const enterTooltipHelp = (event: KeyboardEvent<HTMLButtonElement>) => {
         if (
             event.key !== 'Tab' ||
             event.altKey ||
@@ -263,6 +270,8 @@ export function CompleteFormFieldPresentation(
             event.metaKey ||
             event.shiftKey ||
             event.defaultPrevented ||
+            (!gridHeaderHelpKeyboard &&
+                !formHelpKeyboard(event.currentTarget)) ||
             !descriptionAdmitted()
         )
             return;
@@ -349,8 +358,8 @@ export function CompleteFormFieldPresentation(
                                           cancelClose();
                                           setTooltipOpen(false);
                                           event.stopPropagation();
-                                      } else if (gridHeaderHelpKeyboard) {
-                                          enterGridHeaderHelp(event);
+                                      } else {
+                                          enterTooltipHelp(event);
                                       }
                                   },
                               },
@@ -372,6 +381,7 @@ export function CompleteFormFieldPresentation(
                                             keepOpenOnAnchorInteraction: true,
                                             gridHeaderKeyboard:
                                                 gridHeaderHelpKeyboard,
+                                            formHelpKeyboard,
                                             admitDescription:
                                                 props.admitDescription,
                                         },

@@ -1538,7 +1538,9 @@ export const createPortalView = (options: {
                                 );
                             }
                             if (
-                                config.type === AirtableFieldType.PERCENT &&
+                                (config.type === AirtableFieldType.PERCENT ||
+                                    config.type ===
+                                        AirtableFieldType.CURRENCY) &&
                                 typeof value === 'number' &&
                                 Number.isFinite(value)
                             ) {

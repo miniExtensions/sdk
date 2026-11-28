@@ -754,7 +754,7 @@ export async function checkBrowserPortalExample({
     });
     try {
         await check(
-            'formats physical Duration and Percent columns in the installed starter',
+            'formats physical Duration, Percent and Currency columns in the installed starter',
             async () => {
                 const portal = editablePortal();
                 const values = record('rec_one', 'Timed record', 3661);
@@ -765,11 +765,15 @@ export async function checkBrowserPortalExample({
                 values.fields.fld_fraction = 0.126;
                 values.fields.fld_percent_zero = 0;
                 values.fields.fld_percent_masked = 0.875;
+                values.fields.fld_currency_chf = -1234.5678;
+                values.fields.fld_currency_eur = values.fields.fld_currency_chf;
+                values.fields.fld_currency_number =
+                    values.fields.fld_currency_chf;
+                values.fields.fld_currency_zero = 0;
+                values.fields.fld_currency_blank = null;
+                values.fields.fld_currency_masked = 1234.5678;
                 const loaded = page([values]);
                 const table = loaded.tableIdsToLinkedTableStates.tbl_children;
-                const source = structuredClone(
-                    table.recordIdsToAirtableRecords.rec_one.fields
-                );
                 const durations = [
                     ['fld_elapsed', 'Elapsed', 'h:mm:ss'],
                     ['fld_minutes', 'Minutes', 'h:mm'],
@@ -782,6 +786,13 @@ export async function checkBrowserPortalExample({
                     ['fld_percent_blank', 'Blank percent', 1],
                     ['fld_percent_masked', 'Masked percent', 1],
                 ];
+                const currencies = [
+                    ['fld_currency_chf', 'CHF amount', 'CHF ', 2],
+                    ['fld_currency_eur', 'EUR amount', '€', 3],
+                    ['fld_currency_zero', 'Zero currency', 'CHF ', 2],
+                    ['fld_currency_blank', 'Blank currency', '€', 3],
+                    ['fld_currency_masked', 'Masked currency', '€', 3],
+                ];
                 const numericColumns = [
                     ...durations.map(([id, name, durationFormat]) => [
                         id,
@@ -793,10 +804,20 @@ export async function checkBrowserPortalExample({
                         name,
                         { type: 'percent', options: { precision } },
                     ]),
+                    ...currencies.map(([id, name, symbol, precision]) => [
+                        id,
+                        name,
+                        { type: 'currency', options: { symbol, precision } },
+                    ]),
                     [
                         'fld_fraction',
                         'Fraction',
                         { type: 'number', options: { precision: 0 } },
+                    ],
+                    [
+                        'fld_currency_number',
+                        'Same amount as Number',
+                        { type: 'number', options: { precision: 2 } },
                     ],
                 ];
                 for (const [id, name, config] of numericColumns) {
@@ -813,12 +834,14 @@ export async function checkBrowserPortalExample({
                             isHidden: false,
                             childFormField: null,
                             fieldIsInEditingChildForm: false,
-                            ...(id === 'fld_percent_masked'
+                            ...(id === 'fld_percent_masked' ||
+                            id === 'fld_currency_masked'
                                 ? { miniExtConfig: { obscurePassword: true } }
                                 : {}),
                         }
                     );
                 }
+                const source = structuredClone(loaded);
                 const h = await mount({
                     portal,
                     handlers: { list: () => loaded },
@@ -830,10 +853,8 @@ export async function checkBrowserPortalExample({
                         h.calls.map((call) => call.operation),
                         ['list']
                     );
-                    assert.deepEqual(
-                        table.recordIdsToAirtableRecords.rec_one.fields,
-                        source
-                    );
+                    assert.deepEqual(h.failures, []);
+                    assert.deepEqual(loaded, source);
                     assert.deepEqual(rowIds(h.view.node), ['rec_one']);
                     const tableNode = h.view.node.querySelector('table');
                     const headings = [
@@ -855,6 +876,12 @@ export async function checkBrowserPortalExample({
                         'Zero percent',
                         'Blank percent',
                         'Masked percent',
+                        'CHF amount',
+                        'EUR amount',
+                        'Same amount as Number',
+                        'Zero currency',
+                        'Blank currency',
+                        'Masked currency',
                     ].map((name) => {
                         const index = headings.indexOf(name);
                         assert.ok(
@@ -876,6 +903,12 @@ export async function checkBrowserPortalExample({
                         '13%',
                         '0.126',
                         '0%',
+                        '',
+                        '••••••••',
+                        '-CHF 1,234.57',
+                        '-€1,234.568',
+                        '-1234.5678',
+                        'CHF 0.00',
                         '',
                         '••••••••',
                     ]);

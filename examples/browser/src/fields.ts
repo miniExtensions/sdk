@@ -720,6 +720,15 @@ export function mountBoundFormField(
             beforeChange?.();
             writingFromControl = true;
             try {
+                if (
+                    plainTextInput &&
+                    characterLimit !== undefined &&
+                    plainTextInput.value.length > characterLimit
+                )
+                    plainTextInput.value = plainTextInput.value.slice(
+                        0,
+                        characterLimit
+                    );
                 const result = binding.setValue(control.read());
                 if (result.accepted) changed();
                 else control.write(binding.getSnapshot().value ?? null);
@@ -739,6 +748,19 @@ export function mountBoundFormField(
     status.setAttribute('role', 'status');
     control.node.append(status);
     const plainTextInput = directRootForm ? control.plainTextInput : undefined;
+    const config = schema.miniExtConfig;
+    const configuredLimit =
+        config && 'characterLimit' in config
+            ? config.characterLimit
+            : undefined;
+    const characterLimit =
+        typeof configuredLimit === 'number' &&
+        Number.isSafeInteger(configuredLimit) &&
+        configuredLimit >= 0
+            ? configuredLimit
+            : undefined;
+    if (plainTextInput && characterLimit !== undefined)
+        plainTextInput.setAttribute('maxlength', String(characterLimit));
     const allowReadOnlyPresentation =
         directRootForm && isUnmaskedReadOnlyText(schema);
     let revision = initial.revision;

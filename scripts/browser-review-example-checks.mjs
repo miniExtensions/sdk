@@ -88,6 +88,7 @@ export async function checkBrowserReviewExample({
         )
     );
     const scenarios = [
+        'text-limit-multipage',
         'answers',
         'percent-multipage',
         'date-client-zone',
@@ -340,6 +341,16 @@ export async function checkBrowserReviewExample({
         )
             addAttachmentReviewAnswers(form);
         const multipagePercent = scenario === 'percent-multipage';
+        const multipageTextLimit = scenario === 'text-limit-multipage';
+        if (multipageTextLimit) {
+            form.payload.publicFields.state.multiPageFormMode = 'multi-page';
+            const schemas = form.payload.fieldIdsToSchemas;
+            schemas.fld_review_title.miniExtConfig = { characterLimit: 4 };
+            schemas.fld_review_conditional.miniExtConfig = {};
+            schemas.fld_review_readonly.miniExtConfig.headerSectionTitle =
+                'Second page';
+            form.payload.formRecord.data.fld_review_title = 'Preloaded value';
+        }
         if (scenario === 'answers' || multipagePercent) {
             if (multipagePercent)
                 form.payload.publicFields.state.multiPageFormMode =
@@ -551,7 +562,7 @@ export async function checkBrowserReviewExample({
             const saves = () =>
                 fixture.state.calls.filter((call) => call.route === 'saveForm');
             const open = async () => {
-                if (multipagePercent) {
+                if (multipagePercent || multipageTextLimit) {
                     const review = button(document, 'Review answers');
                     assert.equal(review.hidden, false);
                     assert.equal(review.disabled, false);
@@ -593,7 +604,45 @@ export async function checkBrowserReviewExample({
                             .classList.contains('error'))
             );
             assert.equal(saves().length, 0);
-            if (
+            if (multipageTextLimit) {
+                const capped = field('fld_review_title');
+                const uncapped = field('fld_review_conditional');
+                const secondPage = document.querySelector(
+                    '[data-form-page-field-id="fld_review_readonly"]'
+                );
+                assert.equal(capped.value, 'Preloaded value');
+                assert.equal(capped.maxLength, 4);
+                assert.equal(uncapped.hasAttribute('maxlength'), false);
+                edit('fld_review_title', 'ABCDE');
+                edit('fld_review_conditional', 'ABCDE');
+                assert.equal(capped.value, 'ABCD');
+                assert.equal(uncapped.value, 'ABCDE');
+
+                assert.ok(secondPage.closest('[hidden]'));
+                button(document, 'Next').click();
+                await waitFor(() => secondPage.closest('[hidden]') === null);
+                assert.equal(saves().length, 0);
+                const dialog = await open();
+                for (const [id, value] of [
+                    ['fld_review_title', 'ABCD'],
+                    ['fld_review_conditional', 'ABCDE'],
+                ]) {
+                    const row = dialog.querySelector(
+                        `[data-review-field-id="${id}"]`
+                    );
+                    assert.equal(row.nextElementSibling.textContent, value);
+                }
+                assert.equal(saves().length, 0);
+                button(dialog, 'Confirm').click();
+                await waitFor(() => saves().length === 1);
+                await settled();
+                assert.equal(saves().length, 1);
+                assert.deepEqual(saves()[0].input.formRecord.data, {
+                    ...initial,
+                    fld_review_title: 'ABCD',
+                    fld_review_conditional: 'ABCDE',
+                });
+            } else if (
                 scenario === 'unsupported-section' ||
                 scenario.startsWith('refused-')
             ) {

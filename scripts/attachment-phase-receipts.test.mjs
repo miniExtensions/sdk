@@ -994,7 +994,7 @@ async function timeoutFixture(t, phase, fault = 'none') {
             clearInterval(keepAlive);
         }
         await observe('finish');
-        process.send({schemaVersion:1,suite,result:suite==='review'?{checks:52}:{checks:104,browserChecks:90}},()=>process.disconnect());
+        process.send({schemaVersion:1,suite,result:suite==='review'?{checks:53}:{checks:104,browserChecks:90}},()=>process.disconnect());
     `
     );
     await assert.rejects(

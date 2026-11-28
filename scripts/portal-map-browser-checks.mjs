@@ -29,6 +29,7 @@ import {
 import { portalMapGoogleBrowserBoundary } from './portal-map-google-browser-boundary.mjs';
 import {
     assertPortalMapColocationTouchCandidate,
+    capturePortalMapColocationPointerCandidate,
     capturePortalMapColocationTouchCandidate,
 } from './portal-map-colocation-touch-checks.mjs';
 
@@ -564,12 +565,13 @@ export async function checkPortalMapBrowser({
                 );
             }
         };
-        async function visit(format, mode) {
+        async function visit(format, mode, { pointerWidth } = {}) {
             await closeCurrent();
-            const touch = mode === 'colocation-touch';
+            const colocation = mode === 'colocation-touch';
+            const touch = colocation && pointerWidth == null;
             const context = await browser.newContext({
-                viewport: touch
-                    ? { width: 390, height: 780 }
+                viewport: colocation
+                    ? { width: pointerWidth ?? 390, height: 780 }
                     : { width: 1440, height: 1100 },
                 ...(touch && { hasTouch: true, isMobile: true }),
                 serviceWorkers: 'block',
@@ -1005,63 +1007,101 @@ export async function checkPortalMapBrowser({
             );
         }
 
+        async function checkColocation(
+            format,
+            name,
+            observation,
+            exercise,
+            pointerWidth
+        ) {
+            evidence.phase = format + ':' + name;
+            const item = await visit(format, 'colocation-touch', {
+                pointerWidth,
+            });
+            await bounded(
+                'Actual Loader bootstrap request',
+                () => item.providerSeen.promise
+            );
+            item.responseGate.resolve('fulfill');
+            await waitCards('first', 3);
+            await item.page.evaluate(() =>
+                window.portalMapGoogleBoundary.draw()
+            );
+            await exercise(item.page);
+            const cases = [];
+            await record(cases, format, name);
+            assert.equal(item.providerRequests, 1);
+            assert.equal(item.routeFulfilled, 1);
+            assert.equal(item.routeAborted, 0);
+            assert.equal(item.callbackValidated, true);
+            assert.equal(evidence.externalProviderEgress, 0);
+            await item.page.evaluate(() =>
+                window.portalMapProof.unmount('first')
+            );
+            const cleanupAfterUnmount = await assertPrivateSafe();
+            assertCleanBoundary(cleanupAfterUnmount.boundary);
+            assert.deepEqual(cleanupAfterUnmount.host.mounted, []);
+            assert.equal(
+                cleanupAfterUnmount.host.triggerRegistrations,
+                cleanupAfterUnmount.host.triggerReleases
+            );
+            observation.case = { ...cases[0], cleanupAfterUnmount };
+        }
+
         for (const format of ['esm', 'cjs']) {
             const cases = [];
             {
-                const touchCases = [];
                 const name = 'colocation-touch';
-                evidence.phase = format + ':' + name;
-                const item = await visit(format, name);
-                await bounded(
-                    'Actual Loader bootstrap request',
-                    () => item.providerSeen.promise
-                );
-                item.responseGate.resolve('fulfill');
-                await waitCards('first', 3);
-                await item.page.evaluate(() =>
-                    window.portalMapGoogleBoundary.draw()
-                );
                 evidence.colocationTouch ??= {};
                 const observation = {};
                 evidence.colocationTouch[format] = observation;
-                await capturePortalMapColocationTouchCandidate(item.page, {
-                    observation,
-                    onKeyboardFocus: () =>
-                        item.page.screenshot({
-                            path: join(
-                                output,
-                                `portal-map-${format}-${name}-keyboard-bay.png`
-                            ),
-                            fullPage: true,
-                        }),
-                    onDialog: (recordId) =>
-                        item.page.screenshot({
-                            path: join(
-                                output,
-                                `portal-map-${format}-${name}-${recordId}-choices.png`
-                            ),
-                            fullPage: true,
-                        }),
-                });
-                await record(touchCases, format, name);
-                assert.equal(item.providerRequests, 1);
-                assert.equal(item.routeFulfilled, 1);
-                assert.equal(item.routeAborted, 0);
-                assert.equal(item.callbackValidated, true);
-                assert.equal(evidence.externalProviderEgress, 0);
-                await item.page.evaluate(() =>
-                    window.portalMapProof.unmount('first')
+                await checkColocation(format, name, observation, (page) =>
+                    capturePortalMapColocationTouchCandidate(page, {
+                        observation,
+                        onKeyboardFocus: () =>
+                            page.screenshot({
+                                path: join(
+                                    output,
+                                    `portal-map-${format}-${name}-keyboard-bay.png`
+                                ),
+                                fullPage: true,
+                            }),
+                        onDialog: (recordId) =>
+                            page.screenshot({
+                                path: join(
+                                    output,
+                                    `portal-map-${format}-${name}-${recordId}-choices.png`
+                                ),
+                                fullPage: true,
+                            }),
+                    })
                 );
-                const cleanupAfterUnmount = await assertPrivateSafe();
-                assertCleanBoundary(cleanupAfterUnmount.boundary);
-                assert.deepEqual(cleanupAfterUnmount.host.mounted, []);
-                assert.equal(
-                    cleanupAfterUnmount.host.triggerRegistrations,
-                    cleanupAfterUnmount.host.triggerReleases
-                );
-                touchCases[0].cleanupAfterUnmount = cleanupAfterUnmount;
                 assertPortalMapColocationTouchCandidate(observation);
-                observation.case = touchCases[0];
+            }
+            evidence.colocationPointer ??= {};
+            const pointer = (evidence.colocationPointer[format] = {});
+            for (const width of [390, 1280]) {
+                const name = 'colocation-pointer-' + width;
+                const observation = (pointer[width] = {});
+                await checkColocation(
+                    format,
+                    name,
+                    observation,
+                    (page) =>
+                        capturePortalMapColocationPointerCandidate(page, {
+                            observation,
+                            captureFocus: () =>
+                                page.screenshot({
+                                    path: join(
+                                        output,
+                                        `portal-map-${format}-${name}-keyboard-bay.png`
+                                    ),
+                                    fullPage: true,
+                                }),
+                        }),
+                    width
+                );
+                assert.equal(observation.before.viewport.width, width);
             }
             evidence.phase = format + ':shared-default-loader';
             let item = await visit(format, 'shared');
@@ -1692,7 +1732,7 @@ export async function checkPortalMapBrowser({
         assert.deepEqual(evidence.unexpectedRequests, []);
         evidence.status = 'passed';
         evidence.scope =
-            'Actual packed SDK ESM/CJS PortalMap, class GoogleMap, OverlayViewF, default driver and one direct Loader1.16.8; actual browser layout, keyboard, shared-point touch and portals under StrictMode, byte-identical physical installed SDK copies using opposite ESM/CJS trees and sharing one host coordinator, and actual no-DOM packed Node SSR followed by hydrateRoot preserving loading nodes without recoverable errors. Only intercepted Google JS/API is synthetic. No real provider egress, Google geography/gestures, key delivery, native host or persistence acceptance.';
+            'Actual packed SDK ESM/CJS PortalMap, class GoogleMap, OverlayViewF, default driver and one direct Loader1.16.8; actual browser layout, keyboard focus paint, shared-point mouse and touch activation and portals under StrictMode, byte-identical physical installed SDK copies using opposite ESM/CJS trees and sharing one host coordinator, and actual no-DOM packed Node SSR followed by hydrateRoot preserving loading nodes without recoverable errors. Only intercepted Google JS/API is synthetic. No real provider egress, Google geography/gestures, key delivery, native host or persistence acceptance.';
     } catch (error) {
         const sensitiveDiagnostic =
             String(error.message).includes(portalMapSyntheticKey) ||

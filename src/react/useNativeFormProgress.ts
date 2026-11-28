@@ -27,6 +27,8 @@ export type NativeFormProgressPorts = {
         writerId: string;
         record: AirtableFieldSet;
         expectedRevision: number | null;
+        /** Compare with the persisted writer alongside the revision after acquiring the lock. */
+        expectedWriterId: string | null;
         /** Forward into storage: this must be checked after acquiring its lock. */
         isWriteStillEligible(): boolean;
     }): Promise<NativeFormProgressWriteResult | { status: 'cancelled' }>;
@@ -53,6 +55,7 @@ type FormProgressWriterState = {
     lastObservedRecord: AirtableFieldSet;
     pendingWrite: Promise<void>;
     revision: number | null;
+    persistedWriterId: string | null;
     shareId: string;
     writerId: string;
 };
@@ -141,6 +144,7 @@ export function useNativeFormProgress({
                         existingSnapshot?.record ?? unfilteredFormRecord.data,
                     pendingWrite: Promise.resolve(),
                     revision: existingSnapshot?.revision ?? null,
+                    persistedWriterId: existingSnapshot?.writerId ?? null,
                     shareId,
                     writerId: ports.getWriterId(shareId),
                 };
@@ -183,6 +187,7 @@ export function useNativeFormProgress({
                                 writerStateRef.current === writerState &&
                                 !writerState.hasConflict,
                             expectedRevision: writerState.revision,
+                            expectedWriterId: writerState.persistedWriterId,
                             record,
                             shareId,
                             writerId: writerState.writerId,
@@ -194,6 +199,7 @@ export function useNativeFormProgress({
 
                     if (result.status === 'written') {
                         writerState.revision = result.revision;
+                        writerState.persistedWriterId = writerState.writerId;
                     } else if (
                         result.status === 'unavailable' &&
                         writerStateRef.current === writerState &&

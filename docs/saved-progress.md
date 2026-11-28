@@ -53,9 +53,10 @@ export function FormProgress(props: NativeFormProgressOptions) {
 
 Constructing ports/storage and rendering on the server perform no browser I/O.
 All globals above are accessed only by invoked ports after commit. A host with
-no browser must provide non-browser ports. The storage write must forward the
-hook's `isWriteStillEligible` callback into the storage operation; checking it
-before calling `write` loses cancellation while a Web Lock is pending.
+no browser must provide non-browser ports. Forward `expectedRevision`,
+`expectedWriterId`, and `isWriteStillEligible` into the storage operation.
+Storage checks all three after acquiring its lock so a late write respects
+cancellation and a recreated draft's identity.
 
 Pass `surfaceEnabled: false` for previews: the writer retires without removal.
 Pass `shareId: null` for a non-direct share: no progress work is performed.

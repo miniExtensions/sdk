@@ -28,7 +28,7 @@ const testFiles = [
     'printableDOM',
     'reactPrintableForm',
 ];
-const expectedTestCount = 50;
+const expectedTestCount = 51;
 const publicImports = new Map([
     ['../src/ui/readonlyPrintDocument.js', '@miniextensions/sdk/ui'],
     ['../src/ui/printableForm.js', '@miniextensions/sdk/ui'],

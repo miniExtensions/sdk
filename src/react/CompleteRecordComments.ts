@@ -5,6 +5,7 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    useState,
     useSyncExternalStore,
     type CSSProperties,
     type MouseEvent,
@@ -115,6 +116,13 @@ export function CompleteRecordComments(
     const { appearance, controller, labels } = props;
     const { state, act } = useCommentsView(controller);
     const titleId = useId();
+    const [composerOwner, setComposerOwner] = useState({
+        controller,
+        key: 0,
+    });
+    // Keep browser Undo scoped to the controller that owns the draft.
+    if (composerOwner.controller !== controller)
+        setComposerOwner({ controller, key: composerOwner.key + 1 });
     const retryFocus = useRef<HTMLButtonElement | null>(null);
     useCommitEffect(
         () => () => {
@@ -229,6 +237,7 @@ export function CompleteRecordComments(
             ? h(
                   'footer',
                   {
+                      key: composerOwner.key,
                       className: 'mx-sdk-comments-footer',
                       // Keep the native textarea and its Undo history across paging.
                       hidden: state.loadingOlder,

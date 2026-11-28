@@ -24,7 +24,8 @@ const instructions = Array.from({length: 7}, (_, index) =>
 ).join('') + '<p>8. END OF INSTRUCTIONS</p>';
 const document={language:'en',fields:[
  field('name','Name',{kind:'text',value:'Synthetic Person',emptyLabel:'None'},{description:{html:instructions,imageUrl:null,placement:'top',truncate:true}}),
- field('password','Password',{kind:'text',value:'••••••••',emptyLabel:'None'},{description:{html:'<p>Complete configured-order document.</p>',imageUrl:null,placement:'top',truncate:false}}),
+ field('password','Password',{kind:'text',value:'••••••••',emptyLabel:'None'},{description:{html:'<p>Complete configured-order document.</p>',imageUrl:image,placement:'top',truncate:false}}),
+ field('diagram','Instruction diagram',{kind:'text',value:'Diagram field value',emptyLabel:'None'},{description:{html:null,imageUrl:image,placement:'tooltip',truncate:false}}),
  field('images','Synthetic images',{kind:'attachments',items:[{key:'first',label:'First synthetic image',kind:'image',url:image,imageSources:[image]},{key:'duplicate',label:'Second synthetic image',kind:'image',url:image,imageSources:[image]}],layout:'grid',columns:2,fit:'contain',thumbnailSize:'medium',showNames:true,emptyLabel:'None'}),
  field('attachment-names','Named attachments',iconAttachments),
  field('hidden-attachment-names','Hidden attachment names',{...iconAttachments,showNames:false}),
@@ -245,6 +246,84 @@ export async function checkPrintableAttachmentNames({ page, evidence }) {
     }
 }
 
+async function checkPrintableTooltipDiagram(page, evidence, readMore) {
+    const field = (title) =>
+        page.locator('.mx-sdk-print-field').filter({
+            has: page.getByText(title, { exact: true }),
+        });
+    const diagramField = field('Instruction diagram');
+    const topImage = field('Password').locator('img:visible');
+    const trigger = diagramField.locator('.mx-sdk-field-tooltip-trigger');
+    const tooltip = page.locator('[role="tooltip"]');
+    const diagram = diagramField.locator('img:visible');
+    const imageMetrics = (image) =>
+        image.evaluate(async (element) => {
+            await element.decode();
+            const box = element.getBoundingClientRect();
+            return {
+                naturalWidth: element.naturalWidth,
+                naturalHeight: element.naturalHeight,
+                width: box.width,
+                height: box.height,
+            };
+        });
+    const assertImage = (metrics) => {
+        assert.equal(metrics.naturalWidth, 48);
+        assert.equal(metrics.naturalHeight, 24);
+        assert(metrics.width > 0 && metrics.height > 0);
+    };
+    const result = (evidence.tooltipDiagram = {});
+    assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(await diagram.count(), 0);
+    assert.equal(await tooltip.count(), 0);
+    assert.equal(await topImage.count(), 1);
+    const topScreen = await imageMetrics(topImage);
+    assertImage(topScreen);
+
+    try {
+        await page.emulateMedia({ media: 'print' });
+        result.printImageCount = await diagram.count();
+        result.printControl = await trigger.evaluate((element) => ({
+            display: getComputedStyle(element.closest('.mx-sdk-field-tooltip'))
+                .display,
+            width: element.getBoundingClientRect().width,
+            height: element.getBoundingClientRect().height,
+        }));
+        assert.equal(
+            result.printImageCount,
+            1,
+            'Closed tooltip should print one diagram'
+        );
+        assert.deepEqual(result.printControl, {
+            display: 'none',
+            width: 0,
+            height: 0,
+        });
+        result.printImage = await imageMetrics(diagram);
+        assertImage(result.printImage);
+        assert.equal(await topImage.count(), 1);
+        assert.deepEqual(await imageMetrics(topImage), topScreen);
+    } finally {
+        await page.emulateMedia({ media: 'screen' });
+    }
+
+    await readMore.focus();
+    await page.keyboard.press('Tab');
+    assert(
+        await trigger.evaluate((element) => element === document.activeElement)
+    );
+    const popupImage = tooltip.locator('img:visible');
+    await popupImage.waitFor();
+    assert.equal(await popupImage.count(), 1);
+    assert.equal(await diagram.count(), 0);
+    result.screenImage = await imageMetrics(popupImage);
+    assertImage(result.screenImage);
+    await page.keyboard.press('Escape');
+    await tooltip.waitFor({ state: 'hidden' });
+    result.screenKeyboard = true;
+    result.topPlacement = topScreen;
+}
+
 export async function checkPrintableFormBrowser({ page, evidence }) {
     await checkPrintableAttachmentNames({ page, evidence });
     await page.emulateMedia({ media: 'screen' });
@@ -291,6 +370,7 @@ export async function checkPrintableFormBrowser({ page, evidence }) {
             assert.deepEqual(state.labels, [
                 'Name',
                 'Password',
+                'Instruction diagram',
                 'Synthetic images',
                 'Named attachments',
                 'Hidden attachment names',
@@ -365,6 +445,7 @@ export async function checkPrintableFormBrowser({ page, evidence }) {
     } finally {
         await page.emulateMedia({ media: 'screen' });
     }
+    await checkPrintableTooltipDiagram(page, evidence, readMore);
     evidence.limits = [
         'Packed renderer/CSS geometry and local synthetic images; no native print-dialog or hardcopy claim.',
     ];

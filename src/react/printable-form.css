@@ -17,6 +17,9 @@
 .mx-sdk-print-title {
     flex-basis: 100%;
 }
+.mx-sdk-print-document .mx-sdk-print-tooltip-image {
+    display: none;
+}
 /* Quill's interactive 100% heights create a percentage-height cycle inside
    readonly field help. Print documents need intrinsic flow for help and value. */
 .mx-sdk-print-document .ql-container,
@@ -197,6 +200,12 @@
     .mx-sdk-print-document {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+    }
+    .mx-sdk-print-document .mx-sdk-field-tooltip {
+        display: none;
+    }
+    .mx-sdk-print-document .mx-sdk-print-tooltip-image {
+        display: block;
     }
     .mx-sdk-print-document
         .mx-sdk-print-attachments-icon

@@ -211,12 +211,42 @@ async function readTouchChoices(page) {
 
 export async function capturePortalMapColocationTouchCandidate(
     page,
-    { onDialog, observation }
+    { onDialog, onKeyboardFocus, observation }
 ) {
     const before = await readPortalMapTouchLayout(page);
     const dialogs = [];
     const taps = [];
-    Object.assign(observation, { before, dialogs, taps });
+    const keyboard = [];
+    Object.assign(observation, { before, keyboard, dialogs, taps });
+    assert.equal(before.shared.openOwners[0], cardLabels[1]);
+    for (const [index, label] of cardLabels.entries()) {
+        await page.keyboard.press('Tab');
+        const state = await page.evaluate(({ x, y }) => {
+            const owner = (button) =>
+                button
+                    ?.closest('.mx-sdk-portal-map-card')
+                    ?.getAttribute('aria-label') ?? null;
+            const focused = document.activeElement;
+            const host = window.portalMapProof.snapshot();
+            return {
+                focused: owner(focused),
+                focusVisible: focused?.matches(
+                    '.mx-sdk-portal-map-open:focus-visible'
+                ),
+                top: owner(document.elementFromPoint(x, y)),
+                callbacks: host.opens,
+                submits: host.submits,
+            };
+        }, before.shared.point);
+        keyboard.push(state);
+        assert.equal(state.focused, label);
+        assert.equal(state.focusVisible, true);
+        assert.equal(state.top, cardLabels[Math.min(index, 1)]);
+        assert.deepEqual(state.callbacks, []);
+        assert.equal(state.submits, 0);
+        if (index === 0) await onKeyboardFocus();
+    }
+    await page.evaluate(() => document.activeElement.blur());
     const dialog = page.locator(choiceDialog);
     for (const [index, record] of ['bay-a', 'warehouse-booking-b'].entries()) {
         taps.push(

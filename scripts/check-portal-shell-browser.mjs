@@ -42,8 +42,146 @@ const report = {
         encoding: 'utf8',
     }).trim(),
     profiles: [],
+    rtlSidebarResize: [],
 };
 let browser, server;
+async function checkRtlSidebarResize(page, separator, configure, evidence) {
+    const setWidth = (width) =>
+        configure({
+            header: {
+                layout: 'sidebar',
+                title: '<Customer Portal>',
+                sidebarWidth: width,
+            },
+        });
+    const geometry = () =>
+        separator.evaluate((button) => {
+            const shell = button.closest('.mx-sdk-portal-shell');
+            const edge = shell
+                .querySelector('main')
+                .getBoundingClientRect().right;
+            const bounds = button.getBoundingClientRect();
+            const y = bounds.top + 30;
+            return {
+                edge,
+                y,
+                width: shell.getBoundingClientRect().right - edge,
+                handleCenter: bounds.left + bounds.width / 2,
+                hit:
+                    document.elementFromPoint(edge, y)?.closest('button') ===
+                    button,
+            };
+        });
+    const widths = () => page.evaluate(() => window.proof.sidebarWidths);
+    await page.evaluate(() => window.enableSidebarResize(true));
+    try {
+        await setWidth(384);
+        await separator.waitFor();
+        await page.evaluate(() => {
+            document.querySelector('#app').dir = 'rtl';
+        });
+        await page.evaluate(
+            () =>
+                new Promise((resolve) =>
+                    requestAnimationFrame(() => requestAnimationFrame(resolve))
+                )
+        );
+        const drag = async (delta, expected, replacement) => {
+            const start = await geometry();
+            const before = await widths();
+            const owner = await page.evaluate(() => {
+                const { scope, revision } = window.fixtureCommittedSnapshot;
+                return { scope, revision };
+            });
+            const attempt = { delta, start, before: before.length };
+            evidence.drags.push(attempt);
+            await page.mouse.move(start.edge, start.y);
+            await page.mouse.down();
+            try {
+                await page.mouse.move(start.edge + delta, start.y, {
+                    steps: 4,
+                });
+                attempt.preview = (await geometry()).width;
+                attempt.pendingCommits =
+                    (await widths()).length - before.length;
+                if (replacement !== undefined) await setWidth(replacement);
+            } finally {
+                await page.mouse.up();
+            }
+            assert.equal(
+                start.handleCenter,
+                start.edge,
+                JSON.stringify(attempt)
+            );
+            assert.equal(start.hit, true, JSON.stringify(attempt));
+            assert.equal(attempt.preview, expected);
+            assert.equal(attempt.pendingCommits, 0);
+            await expect
+                .poll(async () => (await geometry()).width)
+                .toBe(replacement ?? expected);
+            attempt.after = await geometry();
+            attempt.commits = (await widths()).slice(before.length);
+            assert.deepEqual(
+                attempt.commits,
+                replacement === undefined ? [{ ...owner, width: expected }] : []
+            );
+        };
+        evidence.initial = await geometry();
+        assert.equal(evidence.initial.width, 384);
+        assert.equal(evidence.initial.edge, 1056);
+        await drag(-40, 424);
+        await drag(40, 384);
+        await drag(-750, 600);
+        await drag(500, 120);
+        await drag(-50, 170, 300);
+        const start = await geometry();
+        const before = await widths();
+        await page.mouse.move(start.edge, start.y);
+        await page.mouse.down();
+        let preview;
+        try {
+            await page.mouse.move(start.edge - 40, start.y, { steps: 4 });
+            preview = (await geometry()).width;
+            await page.evaluate(() =>
+                document.querySelector('#app').removeAttribute('dir')
+            );
+            await page.mouse.move(start.edge - 80, start.y);
+        } finally {
+            await page.mouse.up();
+        }
+        const readLtrGeometry = () =>
+            separator.evaluate((button) => {
+                const main = button
+                    .closest('.mx-sdk-portal-shell')
+                    .querySelector('main');
+                const bounds = button.getBoundingClientRect();
+                return {
+                    width: main.getBoundingClientRect().left,
+                    handleCenter: bounds.left + bounds.width / 2,
+                };
+            });
+        const expectedLtrGeometry = { width: 300, handleCenter: 300 };
+        await expect.poll(readLtrGeometry).toEqual(expectedLtrGeometry);
+        const afterDirectionChange = await readLtrGeometry();
+        evidence.retiredDirection = {
+            preview,
+            afterDirectionChange,
+            commits: (await widths()).slice(before.length),
+        };
+        assert.deepEqual(evidence.retiredDirection, {
+            preview: 340,
+            afterDirectionChange: expectedLtrGeometry,
+            commits: [],
+        });
+        evidence.passed = true;
+    } finally {
+        await page.evaluate(() => {
+            document.querySelector('#app').removeAttribute('dir');
+            window.enableSidebarResize(false);
+        });
+    }
+}
+
 async function checkAccountMenuBorders(panel, expectedRowBorder) {
     const { popup, rows } = await panel.evaluate((node) => {
         const borders = (element) => {
@@ -2541,6 +2679,14 @@ try {
                         () => window.proof.sidebarWidths.length
                     ),
                     10
+                );
+                const rtlResize = { react, format, drags: [] };
+                report.rtlSidebarResize.push(rtlResize);
+                await checkRtlSidebarResize(
+                    page,
+                    separator,
+                    configure,
+                    rtlResize
                 );
                 await page.setViewportSize({ width: 390, height: 844 });
                 await page.evaluate(() => window.enableSidebarResize(true));

@@ -4,7 +4,7 @@ const titles = ['Bay A', 'Warehouse booking B', 'Depot C'];
 const cardLabels = titles.map((title) => `Record ${title}`);
 const choiceDialog = 'dialog.mx-sdk-portal-map-choices[open]';
 
-async function readPortalMapTouchLayout(page) {
+async function readPortalMapColocationLayout(page) {
     return page.evaluate((cardLabels) => {
         const openOwner = (button) =>
             button
@@ -114,7 +114,7 @@ async function readPortalMapTouchLayout(page) {
                 true
             );
         }
-        window.portalMapColocationTouchEvents = events;
+        window.portalMapColocationEvents = events;
         const host = window.portalMapProof.snapshot();
         return {
             viewport: {
@@ -135,21 +135,21 @@ async function readPortalMapTouchLayout(page) {
     }, cardLabels);
 }
 
+async function readColocationInput(page) {
+    return page.evaluate((choiceDialog) => {
+        const host = window.portalMapProof.snapshot();
+        return {
+            events: window.portalMapColocationEvents.splice(0),
+            callbacks: host.opens,
+            submits: host.submits,
+            openDialogs: document.querySelectorAll(choiceDialog).length,
+        };
+    }, choiceDialog);
+}
+
 async function tapPortalMap(page, name, point) {
     await page.touchscreen.tap(point.x, point.y);
-    return {
-        name,
-        point,
-        ...(await page.evaluate((choiceDialog) => {
-            const host = window.portalMapProof.snapshot();
-            return {
-                events: window.portalMapColocationTouchEvents.splice(0),
-                callbacks: host.opens,
-                submits: host.submits,
-                openDialogs: document.querySelectorAll(choiceDialog).length,
-            };
-        }, choiceDialog)),
-    };
+    return { name, point, ...(await readColocationInput(page)) };
 }
 
 async function readTouchChoices(page) {
@@ -209,11 +209,178 @@ async function readTouchChoices(page) {
     };
 }
 
+async function readFocusedMarker(page, point) {
+    return page.evaluate(({ x, y }) => {
+        const owner = (node) =>
+            node
+                ?.closest('.mx-sdk-portal-map-card')
+                ?.getAttribute('aria-label') ?? null;
+        const active = document.activeElement;
+        return {
+            owner: owner(active),
+            focusVisible: active?.matches(
+                '.mx-sdk-portal-map-open:focus-visible'
+            ),
+            hitOwner: owner(document.elementFromPoint(x, y)),
+        };
+    }, point);
+}
+
+async function focusPaint(page, idle, focused) {
+    return page.evaluate(
+        async (frames) => {
+            const accentPixels = [];
+            for (const png of frames) {
+                const image = await createImageBitmap(
+                    new Blob(
+                        [
+                            Uint8Array.from(atob(png), (value) =>
+                                value.charCodeAt(0)
+                            ),
+                        ],
+                        { type: 'image/png' }
+                    )
+                );
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = image.width;
+                    canvas.height = image.height;
+                    const context = canvas.getContext('2d');
+                    context.drawImage(image, 0, 0);
+                    const { data } = context.getImageData(
+                        0,
+                        0,
+                        image.width,
+                        image.height
+                    );
+                    let count = 0;
+                    for (let offset = 0; offset < data.length; offset += 4)
+                        if (
+                            data[offset] === 37 &&
+                            data[offset + 1] === 99 &&
+                            data[offset + 2] === 235 &&
+                            data[offset + 3] === 255
+                        )
+                            count++;
+                    accentPixels.push(count);
+                } finally {
+                    image.close();
+                }
+            }
+            return { idle: accentPixels[0], focused: accentPixels[1] };
+        },
+        [idle.toString('base64'), focused.toString('base64')]
+    );
+}
+
+export async function capturePortalMapColocationPointerCandidate(
+    page,
+    { captureFocus, observation }
+) {
+    const before = await readPortalMapColocationLayout(page);
+    observation.before = before;
+    assert.equal(before.viewport.touchPoints, 0);
+    assert.equal(before.shared.openOwners[0], cardLabels[1]);
+    assert.deepEqual(before.callbacks, []);
+    const [bayBox, warehouseBox] = before.opens;
+    // Leave room for the two-pixel accent outline and its two-pixel offset.
+    const clip = {
+        x: Math.floor(bayBox.left) - 6,
+        y: Math.floor(bayBox.top) - 6,
+        width: Math.ceil(bayBox.width) + 12,
+        height: Math.ceil(bayBox.height) + 12,
+    };
+    const idle = await page.screenshot({ clip, scale: 'css' });
+    await page.keyboard.press('Tab');
+    observation.focused = await readFocusedMarker(page, before.shared.point);
+    assert.deepEqual(observation.focused, {
+        owner: cardLabels[0],
+        focusVisible: true,
+        hitOwner: cardLabels[1],
+    });
+    const focused = await page.screenshot({ clip, scale: 'css' });
+    observation.focusPaint = await focusPaint(page, idle, focused);
+    assert.equal(observation.focusPaint.idle, 0);
+    assert(
+        observation.focusPaint.focused > 0,
+        'Bay A must paint its visible focus outline'
+    );
+    await captureFocus();
+    const bay = { root: 'first', record: 'bay-a' };
+    const warehouse = { root: 'first', record: 'warehouse-booking-b' };
+
+    await page.keyboard.press('Enter');
+    observation.enter = await readColocationInput(page);
+    assert.deepEqual(observation.enter.callbacks, [bay]);
+    assert.deepEqual(
+        observation.enter.events.map(
+            ({ type, cardLabel, detail, trusted }) => ({
+                type,
+                cardLabel,
+                detail,
+                trusted,
+            })
+        ),
+        [{ type: 'click', cardLabel: cardLabels[0], detail: 0, trusted: true }]
+    );
+    assert.deepEqual(
+        await readFocusedMarker(page, before.shared.point),
+        observation.focused
+    );
+    const assertMouseGesture = (gesture, callbacks) => {
+        assert.deepEqual(gesture.callbacks, callbacks);
+        assert.deepEqual(
+            gesture.events.map(({ type }) => type),
+            ['pointerdown', 'pointerup', 'click']
+        );
+        assert(
+            gesture.events.every(
+                ({ trusted, pointerType, cardLabel }) =>
+                    trusted &&
+                    pointerType === 'mouse' &&
+                    cardLabel === cardLabels[1]
+            )
+        );
+        assert.equal(gesture.events.at(-1).detail, 1);
+        assert.equal(gesture.submits, 0);
+        assert.equal(gesture.openDialogs, 0);
+    };
+
+    const { x, y } = before.shared.point;
+    await page.mouse.click(x, y);
+    observation.sharedMouse = await readColocationInput(page);
+    assertMouseGesture(observation.sharedMouse, [bay, warehouse]);
+
+    // Focus the wider card with real keys. A unique outer point exposes a
+    // regression that disables the entire keyboard-focused card's button.
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    observation.uniqueWarehousePoint = {
+        x: Math.round((warehouseBox.left + bayBox.left) / 2),
+        y,
+    };
+    assert(observation.uniqueWarehousePoint.x < bayBox.left);
+    observation.focusedWarehouse = await readFocusedMarker(
+        page,
+        observation.uniqueWarehousePoint
+    );
+    assert.deepEqual(observation.focusedWarehouse, {
+        owner: cardLabels[1],
+        focusVisible: true,
+        hitOwner: cardLabels[1],
+    });
+    await page.mouse.click(observation.uniqueWarehousePoint.x, y);
+    observation.uniqueMouse = await readColocationInput(page);
+    assertMouseGesture(observation.uniqueMouse, [bay, warehouse, warehouse]);
+    assert.equal(observation.enter.submits, 0);
+    assert.equal(observation.enter.openDialogs, 0);
+}
+
 export async function capturePortalMapColocationTouchCandidate(
     page,
     { onDialog, onKeyboardFocus, observation }
 ) {
-    const before = await readPortalMapTouchLayout(page);
+    const before = await readPortalMapColocationLayout(page);
     const dialogs = [];
     const taps = [];
     const keyboard = [];
@@ -241,7 +408,7 @@ export async function capturePortalMapColocationTouchCandidate(
         keyboard.push(state);
         assert.equal(state.focused, label);
         assert.equal(state.focusVisible, true);
-        assert.equal(state.top, cardLabels[Math.min(index, 1)]);
+        assert.equal(state.top, cardLabels[1]);
         assert.deepEqual(state.callbacks, []);
         assert.equal(state.submits, 0);
         if (index === 0) await onKeyboardFocus();
@@ -327,7 +494,7 @@ export async function capturePortalMapColocationTouchCandidate(
                 callbacks: host.opens,
                 submits: host.submits,
                 openDialogs: document.querySelectorAll(choiceDialog).length,
-                events: window.portalMapColocationTouchEvents.splice(0),
+                events: window.portalMapColocationEvents.splice(0),
             };
         },
         { cardLabels, choiceDialog }

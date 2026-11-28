@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { it, type TestContext } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { Window, type Event as ResourceBoundaryEvent } from 'happy-dom';
+import {
+    Window,
+    type Element as DOMElement,
+    type Event as ResourceBoundaryEvent,
+} from 'happy-dom';
 import { act, createElement as h, StrictMode, useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import type { CompleteFormFieldPresentationProps } from '../src/react/CompleteFormFieldPresentation.js';
@@ -493,6 +497,61 @@ it('dismisses a hovered portal tooltip with Escape while the real textarea keeps
         f.window.document.body.querySelector('[role="tooltip"]'),
         null
     );
+    assert.equal(f.window.document.activeElement, control);
+    f.unchangedEffects();
+});
+
+it('keeps hovered Form help open across the pointer gap and closes after leaving', async (t) => {
+    const f = await fixture(t);
+    await f.render(
+        shell({
+            description: '<p>Hover guidance</p>',
+            descriptionPlacement: 'tooltip',
+        })
+    );
+    const control = textarea(f);
+    const button = trigger(f);
+    const popup = () =>
+        f.window.document.body.querySelector('[role="tooltip"]');
+    const movePointer = (from: DOMElement, to: DOMElement) =>
+        act(async () => {
+            from.dispatchEvent(
+                new f.window.MouseEvent('mouseout', {
+                    bubbles: true,
+                    relatedTarget: to,
+                })
+            );
+            to.dispatchEvent(
+                new f.window.MouseEvent('mouseover', {
+                    bubbles: true,
+                    relatedTarget: from,
+                })
+            );
+        });
+    await act(async () => control.focus());
+    await movePointer(control, button);
+    const openedHelp = popup();
+    assert.ok(openedHelp);
+    assert.equal(f.container.contains(openedHelp), false);
+
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+        await movePointer(button, control);
+        await act(async () => t.mock.timers.tick(100));
+        assert.equal(popup(), openedHelp);
+        await movePointer(control, openedHelp);
+        await act(async () => t.mock.timers.tick(150));
+        assert.equal(popup(), openedHelp);
+
+        await movePointer(openedHelp, control);
+        await act(async () => t.mock.timers.tick(149));
+        assert.equal(popup(), openedHelp);
+        await act(async () => t.mock.timers.tick(1));
+        assert.equal(popup(), null);
+    } finally {
+        t.mock.timers.reset();
+    }
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
     assert.equal(f.window.document.activeElement, control);
     f.unchangedEffects();
 });

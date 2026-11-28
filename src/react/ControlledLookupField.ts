@@ -51,6 +51,7 @@ import {
 
 const noop = () => false;
 const unavailable = 'Unavailable';
+const maskedText = '••••••••';
 const invalidResult =
     'This field has an invalid value. Check the field in Airtable.';
 
@@ -341,6 +342,23 @@ class ResultBoundary extends Component<
     }
 }
 
+function visibleLinkedCellText(
+    result: LookupResultPresentation | undefined
+): string | undefined {
+    let value: string | null | undefined;
+    if (result?.kind === 'literal') value = result.text;
+    else if (
+        result?.kind === 'text' ||
+        (result?.kind === 'singleLine' &&
+            !result.display.obscurePassword &&
+            !result.display.displayAsButton &&
+            !result.display.displayAsAttachments)
+    )
+        value = result.display.value;
+    const text = value?.trim();
+    return text && text !== maskedText ? text : undefined;
+}
+
 function LinkedCollection({
     display,
     owner,
@@ -366,12 +384,16 @@ function LinkedCollection({
             language: 'en',
             emptyLabel: display.labels.empty,
         });
-    const open = (row: LookupReadonlyLinkedCollection['rows'][number]) =>
+    const open = (
+        row: LookupReadonlyLinkedCollection['rows'][number],
+        accessibleName?: string
+    ) =>
         row.open
             ? h(
                   'button',
                   {
                       type: 'button',
+                      'aria-label': accessibleName,
                       onClick: (event: MouseEvent<HTMLButtonElement>) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -382,6 +404,15 @@ function LinkedCollection({
                   row.open.label
               )
             : null;
+    const usedCaptions = new Set<string>();
+    const sharedCaptions = new Set<string>();
+    if (display.layout === 'table')
+        for (const row of display.rows) {
+            const caption = row.open?.label.trim();
+            if (!caption) continue;
+            if (usedCaptions.has(caption)) sharedCaptions.add(caption);
+            usedCaptions.add(caption);
+        }
     const content =
         display.layout === 'table'
             ? h(
@@ -409,8 +440,43 @@ function LinkedCollection({
                       h(
                           'tbody',
                           null,
-                          ...display.rows.map((row) =>
-                              h(
+                          ...display.rows.map((row) => {
+                              const caption = row.open?.label.trim();
+                              const needsRowName =
+                                  caption && sharedCaptions.has(caption);
+                              let accessibleName: string | undefined;
+                              const cells = display.columns.map((column) => {
+                                  const cell = row.cells.find(
+                                      (item) => item.key === column.key
+                                  );
+                                  if (
+                                      needsRowName &&
+                                      accessibleName === undefined
+                                  ) {
+                                      const rowName = visibleLinkedCellText(
+                                          cell?.result
+                                      );
+                                      const candidate =
+                                          rowName && `${caption} ${rowName}`;
+                                      if (
+                                          candidate &&
+                                          !usedCaptions.has(candidate)
+                                      )
+                                          accessibleName = candidate;
+                                  }
+                                  return h(
+                                      'td',
+                                      { key: column.key },
+                                      cell
+                                          ? h(Result, {
+                                                result: cell.result,
+                                                owner,
+                                                identity,
+                                            })
+                                          : display.labels.unavailable
+                                  );
+                              });
+                              return h(
                                   'tr',
                                   {
                                       key: row.key,
@@ -418,25 +484,10 @@ function LinkedCollection({
                                           ? { height: display.rowHeight }
                                           : undefined,
                                   },
-                                  ...(display.columns ?? []).map((column) => {
-                                      const cell = row.cells?.find(
-                                          (item) => item.key === column.key
-                                      );
-                                      return h(
-                                          'td',
-                                          { key: column.key },
-                                          cell
-                                              ? h(Result, {
-                                                    result: cell.result,
-                                                    owner,
-                                                    identity,
-                                                })
-                                              : display.labels.unavailable
-                                      );
-                                  }),
-                                  h('td', null, open(row))
-                              )
-                          )
+                                  ...cells,
+                                  h('td', null, open(row, accessibleName))
+                              );
+                          })
                       )
                   )
               )
@@ -563,7 +614,7 @@ function Result({
         case 'formula':
             if (result.display.isValid && result.display.obscurePassword)
                 return h(CompleteReadOnlyTextField, {
-                    value: '••••••••',
+                    value: maskedText,
                     language: result.display.language,
                     textSize: result.display.textSize,
                     layout: result.display.layout,
@@ -714,7 +765,7 @@ export function ControlledLookupField(
     switch (state?.status) {
         case 'masked':
             content = h(CompleteReadOnlyTextField, {
-                value: '••••••••',
+                value: maskedText,
                 language: 'en',
             });
             break;

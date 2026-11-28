@@ -599,6 +599,99 @@ it('renders a genuine table projection without list cards and captures its real 
     assert.equal(opened, 1);
 });
 
+it('names shared Lookup table Open buttons from their visible rows', async (t) => {
+    const f = await fixture(t);
+    const opened: Array<{ name: string; trigger: HTMLElement }> = [];
+    const names = ['Ada', 'Grace', 'Katherine'];
+    await f.render(
+        f.props({
+            status: 'ready',
+            result: {
+                kind: 'linkedCollection',
+                display: {
+                    layout: 'table',
+                    phase: 'ready',
+                    columns: [
+                        { key: 'masked', title: 'Masked' },
+                        { key: 'name', title: 'Name' },
+                    ],
+                    labels: {
+                        empty: 'Empty',
+                        loading: 'Loading',
+                        unavailable: 'Unavailable',
+                    },
+                    rows: names.map((name) => ({
+                        key: `occurrence-${name}`,
+                        cells: [
+                            {
+                                key: 'unlisted',
+                                result: {
+                                    kind: 'literal',
+                                    text: 'Unlisted cell',
+                                },
+                            },
+                            {
+                                key: 'masked',
+                                result: {
+                                    kind: 'singleLine',
+                                    display: {
+                                        mode: 'readOnly',
+                                        value:
+                                            name === 'Ada'
+                                                ? '••••••••'
+                                                : 'Concealed cell',
+                                        language: 'en',
+                                        obscurePassword: name !== 'Ada',
+                                    },
+                                },
+                            },
+                            {
+                                key: 'name',
+                                result:
+                                    name === 'Ada'
+                                        ? {
+                                              kind: 'singleLine',
+                                              display: {
+                                                  mode: 'readOnly',
+                                                  value: name,
+                                                  language: 'en',
+                                              },
+                                          }
+                                        : { kind: 'literal', text: name },
+                            },
+                        ],
+                        open: {
+                            label:
+                                name === 'Katherine' ? 'View details' : 'Open',
+                            run(trigger) {
+                                opened.push({ name, trigger });
+                            },
+                        },
+                    })),
+                },
+            },
+        })
+    );
+    const buttons = Array.from(f.host.querySelectorAll('button')).filter(
+        (button) => button.closest('tbody')
+    );
+    const captions = buttons.map((button) => button.textContent);
+    assert.deepEqual(captions, ['Open', 'Open', 'View details']);
+    assert.doesNotMatch(f.text(), /Unlisted cell|Concealed cell/);
+    assert.deepEqual(
+        buttons.map(
+            (button) => button.getAttribute('aria-label') ?? button.textContent
+        ),
+        ['Open Ada', 'Open Grace', 'View details']
+    );
+    await f.click(buttons[0]);
+    await f.click(buttons[1]);
+    assert.deepEqual(opened, [
+        { name: 'Ada', trigger: buttons[0] },
+        { name: 'Grace', trigger: buttons[1] },
+    ]);
+});
+
 it('fences stale inline HTML links while preserving the canonical sanitizer policy', async (t) => {
     const f = await fixture(t);
     await f.render(

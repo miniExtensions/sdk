@@ -40,6 +40,43 @@ window.lookupProof.externalAdmit=()=>externalCapture.admit();
 window.lookupProof.externalRetire=()=>externalCapture.retire();
 window.lookupProof.externalRecover=()=>externalCapture.recover();
 window.lookupProof.externalSnapshot=()=>externalCapture.snapshot();
+window.lookupProof.tableOpenNames = () => {
+ const calls = [];
+ const rows = ['Ada', 'Grace'].map(name => ({
+  key: name,
+  cells: [{
+   key: 'name',
+   result: {
+    kind: 'singleLine',
+    display: { mode: 'readOnly', language: 'en', value: name },
+   },
+  }],
+  open: {
+   label: 'Open',
+   run(trigger) {
+    calls.push({
+     name,
+     focused: trigger === document.activeElement,
+     caption: trigger.textContent,
+    });
+   },
+  },
+ }));
+ window.lookupProof.tableOpenCalls = () => calls;
+ flushSync(() => renew({
+  status: 'ready',
+  result: {
+   kind: 'linkedCollection',
+   display: {
+    layout: 'table',
+    phase: 'ready',
+    columns: [{ key: 'name', title: 'Name' }],
+    rows,
+    labels: { empty: 'Empty', loading: 'Loading', unavailable: 'Unavailable' },
+   },
+  },
+ }));
+};
 window.lookupProof.galleryRecovery=(surface)=>{
  const url=part=>window.location.origin+'/gallery-recovery-'+surface+'-'+part+'.png';
  const broken={id:'failed',type:'image/png',filename:'Adjunto.png',thumbnailUrl:url('thumb'),thumbnails:{full:{url:url(surface==='list'?'preview':'thumb')}},url:url('original')};
@@ -579,6 +616,35 @@ export async function checkControlledLookupBrowser({
                 path: join(output, 'controlled-lookup-rich-' + format + '.png'),
                 fullPage: true,
             });
+
+            await page.evaluate(() => window.lookupProof.tableOpenNames());
+            const tableOpenCalls = () =>
+                page.evaluate(() => window.lookupProof.tableOpenCalls());
+            const expectedTableOpens = [];
+            for (const name of ['Ada', 'Grace']) {
+                const button = page.getByRole('button', {
+                    name: `Open ${name}`,
+                    exact: true,
+                });
+                assert.equal(await button.count(), 1);
+                assert.equal(await button.textContent(), 'Open');
+                await button.focus();
+                await page.keyboard.press('Enter');
+                expectedTableOpens.push({
+                    name,
+                    focused: true,
+                    caption: 'Open',
+                });
+                assert.deepEqual(await tableOpenCalls(), expectedTableOpens);
+            }
+            await page.evaluate(() => window.lookupProof.retire());
+            await page.keyboard.press('Enter');
+            assert.deepEqual(await tableOpenCalls(), expectedTableOpens);
+            record('row-specific Lookup table names and trusted Open', {
+                calls: expectedTableOpens,
+                retiredOwnerCalls: 0,
+            });
+            await page.evaluate(() => window.lookupProof.initial());
 
             await checkContextMenu(false);
 

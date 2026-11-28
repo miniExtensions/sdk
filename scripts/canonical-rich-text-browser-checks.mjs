@@ -693,6 +693,55 @@ window.canonicalRichText={update,snapshot:()=>({state:{...current},writes:[...wr
         await page.locator('#empty-notes').waitFor();
         assert.equal(await page.locator('.ProseMirror').count(), 0);
         assert.equal((await snapshot()).saves.length, 1);
+        const codeLines = ['alpha', '\\', 'omega'];
+        const codeSample = ['```', ...codeLines, '```'].join('\n');
+        const beforeCodeEdit = await snapshot();
+        await update({
+            readOnly: false,
+            identity: 'code-sample:notes',
+            value: `${codeSample}\n\nSample prose`,
+        });
+        const code = editor.locator('pre code');
+        await code.waitFor();
+        const mountedCode = (await code.textContent()).split('\n');
+        assert.deepEqual(mountedCode, codeLines);
+        assert.deepEqual((await snapshot()).writes, beforeCodeEdit.writes);
+        await editor.locator('p').filter({ hasText: 'Sample prose' }).click();
+        await editor.press(documentKeys.end);
+        await page.keyboard.type('!');
+        await page.waitForFunction(() =>
+            window.canonicalRichText
+                .snapshot()
+                .state.value.includes('Sample prose!')
+        );
+        const afterCodeEdit = await snapshot();
+        const codeWrites = afterCodeEdit.writes.slice(
+            beforeCodeEdit.writes.length
+        );
+        assert.equal(codeWrites.length, 1);
+        await page.evaluate(() => window.canonicalRichText.remember());
+        await update({ identity: 'remounted-code-sample:notes' });
+        await code.waitFor();
+        const remountedCode = (await code.textContent()).split('\n');
+        evidence.codeSampleSerialization = {
+            mountedCode,
+            draftWrites: codeWrites,
+            remountedCode,
+        };
+        assert.equal(
+            await page.evaluate(() => window.canonicalRichText.same()),
+            false
+        );
+        assert.deepEqual((await snapshot()).writes, afterCodeEdit.writes);
+        assert.deepEqual(afterCodeEdit.saves, beforeCodeEdit.saves);
+        assert.deepEqual(
+            codeWrites[0].value.split('\n').slice(1, 4),
+            codeLines
+        );
+        assert.deepEqual(remountedCode, codeLines);
+        evidence.results.push(
+            'literal backslash in code survives a native prose edit, one draft write and remount'
+        );
         await page.evaluate(() => window.canonicalRichText.unmount());
         assert.equal(await page.locator('.ProseMirror').count(), 0);
         assert.deepEqual(evidence.pageErrors, []);

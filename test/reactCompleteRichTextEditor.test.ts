@@ -2042,6 +2042,67 @@ for (const { name, text, code } of [
     });
 }
 
+it('keeps literal code backslashes distinct from an empty line or paragraph sentinel', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    const withBackslash = '```\nalpha\n\\\nomega\n```\n\nSample prose';
+    const withoutBackslash = withBackslash.replace('\n\\\n', '\n\n');
+    const render = (value: string) =>
+        f.render(
+            h(CompleteRichTextEditor, {
+                ref,
+                value,
+                onValueChange: (stored) => writes.push(stored),
+            })
+        );
+    await render(withBackslash);
+    const { view } = await f.editor(ref);
+    assert.equal(view.state.doc.firstChild?.textContent, 'alpha\n\\\nomega');
+    assert.deepEqual(writes, []);
+    await act(async () => {
+        view.dispatch(
+            view.state.tr.insertText('!', view.state.doc.content.size - 1)
+        );
+    });
+    assert.deepEqual(writes, [`${withBackslash}!`]);
+    await render(writes[0]!);
+    assert.equal((await f.editor(ref)).view, view);
+
+    await render(`${withoutBackslash}!`);
+    const replacement = (await f.editor(ref)).view;
+    assert.notEqual(replacement, view);
+    assert.equal(
+        replacement.state.doc.firstChild?.textContent,
+        'alpha\n\nomega'
+    );
+    await act(async () => {
+        replacement.dispatch(
+            replacement.state.tr.insertText('\\', 1 + 'alpha\n'.length)
+        );
+    });
+    assert.deepEqual(writes, [`${withBackslash}!`, `${withBackslash}!`]);
+    await render(writes[1]!);
+    assert.equal((await f.editor(ref)).view, replacement);
+
+    await act(async () => {
+        const { doc, schema, tr } = replacement.state;
+        replacement.dispatch(
+            tr.insert(doc.firstChild!.nodeSize, schema.nodes.paragraph.create())
+        );
+    });
+    assert.equal(
+        (await f.editor(ref))
+            .value()
+            .split('\n')
+            .filter((line) => line === '\\').length,
+        2
+    );
+    assert.deepEqual(writes.slice(2), [
+        `${withBackslash.replace('\n\nSample prose', '\n\n\nSample prose')}!`,
+    ]);
+});
+
 it('refuses a captured paste handler after its document owner retires', async (t) => {
     const f = await completeRichTextFixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();

@@ -631,7 +631,9 @@ export function PortalCalendar(props: PortalCalendarProps): ReactElement {
                 { className: 'mx-sdk-portal-calendar__records' },
                 selectedRecords.map(renderRecord)
             )
-          : frame.status === 'ready'
+          : frame.status === 'ready' &&
+              frame.hasMore !== true &&
+              frame.isLoadingMore !== true
             ? h(
                   'p',
                   { className: 'mx-sdk-portal-calendar__empty' },

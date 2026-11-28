@@ -503,9 +503,17 @@ describe('actual starter exact seven peer Portal detail diagnostics', () => {
 });
 
 describe('Portal row summaries use returned display policy', () => {
-    it('formats physical Percent cells without changing stored fractions', async (test) => {
+    it('formats physical Percent and Currency cells without changing stored values', async (test) => {
         const returned = listPage();
         const state = returned.tableIdsToLinkedTableStates[tableId]!;
+        const francs = {
+            type: AirtableFieldType.CURRENCY,
+            options: { symbol: 'CHF', precision: 2 },
+        } as const;
+        const euros = {
+            type: AirtableFieldType.CURRENCY,
+            options: { symbol: '€', precision: 3 },
+        } as const;
         const columns = [
             { id: 'fld_tenths', name: 'Tenths', precision: 1, value: 0.126 },
             { id: 'fld_whole', name: 'Whole', precision: 0, value: 0.126 },
@@ -519,22 +527,51 @@ describe('Portal row summaries use returned display policy', () => {
                 value: 0.875,
                 masked: true,
             },
+            { id: 'fld_chf', name: 'CHF', config: francs, value: 12.345 },
+            { id: 'fld_eur', name: 'EUR', config: euros, value: 12.345 },
+            { id: 'fld_raw_amount', name: 'Raw amount', value: 12.345 },
+            { id: 'fld_chf_zero', name: 'Zero CHF', config: francs, value: 0 },
+            {
+                id: 'fld_eur_blank',
+                name: 'Blank EUR',
+                config: euros,
+                value: null,
+            },
+            {
+                id: 'fld_masked_eur',
+                name: 'Masked EUR',
+                config: euros,
+                value: 98.765,
+                masked: true,
+            },
+            {
+                id: 'fld_text_amount',
+                name: 'Raw text amount',
+                config: francs,
+                value: '12.345',
+            },
         ];
-        state.airtableFields = columns.map(({ id, name, precision }) => ({
-            ...physicalField(),
-            id,
-            name,
-            config:
-                precision === undefined
+        state.airtableFields = columns.map(
+            ({ id, name, precision, config }): RuntimeAirtableField => {
+                const field = { ...physicalField(), id, name };
+                if (config) return { ...field, config };
+                return precision === undefined
                     ? {
-                          type: AirtableFieldType.NUMBER,
-                          options: { precision: 0 },
+                          ...field,
+                          config: {
+                              type: AirtableFieldType.NUMBER,
+                              options: { precision: 0 },
+                          },
                       }
                     : {
-                          type: AirtableFieldType.PERCENT,
-                          options: { precision },
-                      },
-        }));
+                          ...field,
+                          config: {
+                              type: AirtableFieldType.PERCENT,
+                              options: { precision },
+                          },
+                      };
+            }
+        );
         state.recordIdsToAirtableRecords[recordId]!.fields = Object.fromEntries(
             columns.map(({ id, value }) => [id, value])
         );
@@ -576,7 +613,21 @@ describe('Portal row summaries use returned display policy', () => {
                     .map((node) => node.textContent)
                     .join('')
             ),
-            ['12.6%', '13%', '0.126', '0%', '', '••••••••']
+            [
+                '12.6%',
+                '13%',
+                '0.126',
+                '0%',
+                '',
+                '••••••••',
+                'CHF12.35',
+                '€12.345',
+                '12.345',
+                'CHF0.00',
+                '',
+                '••••••••',
+                '12.345',
+            ]
         );
     });
 

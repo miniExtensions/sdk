@@ -41,6 +41,8 @@ export type NativeFormProgressStorageOptions = {
 };
 type NativeFormProgressWriteArgs = {
     expectedRevision: number | null;
+    /** Null witnesses an absent or legacy writer. Omission compares only the revision. */
+    expectedWriterId?: string | null;
     record: AirtableFieldSet;
 };
 type NativeFormProgressWriteWithEligibility = NativeFormProgressWriteArgs & {
@@ -194,12 +196,19 @@ export const createNativeFormProgressStorage = (
                 Reflect.apply(isWriteStillEligible, args, []) === false
             )
                 return { status: 'cancelled' };
+            const expectedWriterId = args.expectedWriterId;
             const currentSnapshot =
-                isWriteStillEligible == null ? read() : readSnapshot();
+                isWriteStillEligible == null && expectedWriterId === undefined
+                    ? read()
+                    : readSnapshot();
             if (currentSnapshot === readUnavailable)
                 return { status: 'unavailable' };
             const currentRevision = currentSnapshot?.revision ?? null;
-            if (currentRevision !== args.expectedRevision)
+            if (
+                currentRevision !== args.expectedRevision ||
+                (expectedWriterId !== undefined &&
+                    (currentSnapshot?.writerId ?? null) !== expectedWriterId)
+            )
                 return { status: 'conflict' };
             const revision = (currentRevision ?? 0) + 1;
             const envelope: Envelope = {

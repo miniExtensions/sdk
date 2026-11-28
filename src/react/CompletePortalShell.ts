@@ -1893,7 +1893,11 @@ function Shell(props: CompletePortalShellProps) {
                       key: snapshot.embed?.preserveElement
                           ? 'portal-embed'
                           : `${selection.itemId}:${selection.url}`,
-                      title: active?.label ?? snapshot.header.title,
+                      title:
+                          active?.type === 'embedded' &&
+                          active.url === selection.url
+                              ? (active.label ?? snapshot.header.title)
+                              : snapshot.header.title,
                       src: selection.url,
                       className: 'mx-sdk-portal-embed',
                       referrerPolicy:

@@ -161,4 +161,15 @@ it('uses the guard captured once inside the lock for admission and read failure'
     const outcome = await cancelled;
     assert.deepEqual(operations, ['lock', 'cancel guard']);
     assert.deepEqual(outcome, { status: 'cancelled' });
+
+    operations.length = 0;
+    assert.deepEqual(
+        await storage.write({
+            expectedRevision: null,
+            expectedWriterId: null,
+            record: {},
+        }),
+        { status: 'unavailable' }
+    );
+    assert.deepEqual(operations, ['lock', 'read', 'warn:read']);
 });

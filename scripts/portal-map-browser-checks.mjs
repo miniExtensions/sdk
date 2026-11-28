@@ -1026,6 +1026,14 @@ export async function checkPortalMapBrowser({
                 evidence.colocationTouch[format] = observation;
                 await capturePortalMapColocationTouchCandidate(item.page, {
                     observation,
+                    onKeyboardFocus: () =>
+                        item.page.screenshot({
+                            path: join(
+                                output,
+                                `portal-map-${format}-${name}-keyboard-bay.png`
+                            ),
+                            fullPage: true,
+                        }),
                     onDialog: (recordId) =>
                         item.page.screenshot({
                             path: join(

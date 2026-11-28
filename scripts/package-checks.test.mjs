@@ -2343,7 +2343,7 @@ test('browser input containment checks real paths rather than symlink names', as
 
 const packedTailResults = {
     attachment: { checks: 104, browserChecks: 90 },
-    review: { checks: 52 },
+    review: { checks: 53 },
 };
 
 async function waitForTailFile(root, name) {
@@ -2469,7 +2469,7 @@ const wait = async (name) => {
     while (!existsSync(join(directory, name))) await delay(10);
 };
 const result = suite === 'attachment'
-    ? { checks: 104, browserChecks: 90 } : { checks: 52 };
+    ? { checks: 104, browserChecks: 90 } : { checks: 53 };
 const report = { schemaVersion: 1, suite, result };
 const send = (message) => new Promise((resolve, reject) => {
     process.send(message, (error) => error ? reject(error) : resolve());

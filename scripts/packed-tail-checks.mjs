@@ -6,7 +6,7 @@ import { createProcessGroupObserver } from './process-group-observer.mjs';
 
 const expected = {
     attachment: { checks: 104, browserChecks: 90 },
-    review: { checks: 52 },
+    review: { checks: 53 },
 };
 
 // Private package-check orchestration. Optional transport/timing arguments let

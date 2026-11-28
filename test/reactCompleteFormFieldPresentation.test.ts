@@ -386,6 +386,62 @@ it('retains the tooltip description without an invisible help link in the tab or
     f.unchangedEffects();
 });
 
+it('enters Form help links and restores the owned trigger at both Tab boundaries', async (t) => {
+    const f = await fixture(t);
+    const help = {
+        description: '<p>Read <a href="#guide">Guide</a></p>',
+        descriptionPlacement: 'tooltip',
+    } as const;
+    await f.render(shell(help));
+    const button = trigger(f);
+    assert.equal(button.form, f.container);
+    const popup = () =>
+        f.window.document.body.querySelector('[role="tooltip"]');
+    const focusTrigger = async () => {
+        await act(async () => {
+            button.focus();
+            await import('../src/react/fieldTooltipPopup.js');
+        });
+        assert.equal(f.window.document.activeElement, button);
+        const link = popup()?.querySelector('a[href="#guide"]');
+        assert.ok(link instanceof f.window.HTMLAnchorElement);
+        // The synthetic DOM does not provide link layout or native Tab.
+        Object.defineProperty(link, 'getClientRects', { value: () => [{}] });
+        link.style.visibility = 'visible';
+        return link;
+    };
+    const tab = async (shiftKey = false) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () =>
+            f.window.document.activeElement?.dispatchEvent(event)
+        );
+        return event.defaultPrevented;
+    };
+
+    const link = await focusTrigger();
+    assert.equal(await tab(), true);
+    assert.equal(f.window.document.activeElement, link);
+    assert.equal(await tab(true), true);
+    assert.equal(f.window.document.activeElement, button);
+    assert.equal(await tab(), true);
+    assert.equal(f.window.document.activeElement, link);
+    assert.equal(await tab(), false);
+    assert.equal(f.window.document.activeElement, button);
+    assert.equal(popup(), null);
+
+    await act(async () => textarea(f).focus());
+    await f.render(shell({ ...help, preview: true }));
+    await focusTrigger();
+    assert.equal(await tab(), false);
+    assert.equal(f.window.document.activeElement, button);
+    f.unchangedEffects();
+});
+
 it('dismisses a hovered portal tooltip with Escape while the real textarea keeps focus', async (t) => {
     const f = await fixture(t);
     await f.render(

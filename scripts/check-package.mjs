@@ -5122,7 +5122,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     await stop();
-    assert.equal(visitorQueryProof.tests, 384);
+    assert.equal(visitorQueryProof.tests, 400);
     console.log(
         'Installed Portal visitor Sort, Search, view buttons and quick/advanced Filter qualification passed.',
         visitorQueryProof

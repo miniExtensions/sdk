@@ -426,6 +426,146 @@ it('keeps a superseded asynchronous receipt out of the replacement view', async 
     assert.deepEqual(outcomes, []);
 });
 
+it('restores the committed term after Clear is refused before publication', async (t) => {
+    const f = await htmlPresentationFixture(t);
+    const owner = host();
+    const outcomes: PortalVisitorSearchOutcome[] = [];
+    let refuse!: (outcome: PortalVisitorSearchOutcome) => void;
+    const pending = new Promise<PortalVisitorSearchOutcome>((resolve) => {
+        refuse = resolve;
+    });
+    const port: PortalVisitorSearchProps['port'] = {
+        ...owner.port,
+        apply(command) {
+            owner.commands.push(command);
+            return pending;
+        },
+    };
+    await f.render(
+        h(
+            'div',
+            null,
+            h(PortalVisitorSearch, {
+                port,
+                onOutcome: (outcome) => outcomes.push(outcome),
+            }),
+            h('button', { id: 'neighbor' }, 'Next')
+        )
+    );
+    const clear = () =>
+        [...f.container.querySelectorAll('button')].find(
+            (button) => button.textContent === 'Clear search'
+        );
+    const button = clear();
+    const input = f.container.querySelector('input');
+    const neighbor = [...f.container.querySelectorAll('button')].find(
+        (candidate) => candidate.id === 'neighbor'
+    );
+    assert.ok(button && input && neighbor);
+    assert.equal(input.value, 'previous');
+    await f.click(button);
+    assert.equal(input.value, '');
+    assert.equal(f.window.document.activeElement, input);
+    await act(async () => {
+        neighbor.focus();
+        refuse({ type: 'refused' });
+    });
+    assert.deepEqual(
+        owner.commands.map(({ source, searchTerm }) => [source, searchTerm]),
+        [['clear', '']]
+    );
+    assert.deepEqual(outcomes, [{ type: 'refused' }]);
+    assert.equal(input.value, 'previous');
+    assert.ok(clear());
+    assert.equal(f.window.document.activeElement, neighbor);
+});
+
+for (const interaction of ['typing', 'submit', 'view'] as const) {
+    it(`does not restore a refused Clear after newer ${interaction}`, async (t) => {
+        const f = await htmlPresentationFixture(t);
+        const owner = host();
+        let refuse!: (outcome: PortalVisitorSearchOutcome) => void;
+        const pending = new Promise<PortalVisitorSearchOutcome>((resolve) => {
+            refuse = resolve;
+        });
+        const port: PortalVisitorSearchProps['port'] = {
+            ...owner.port,
+            apply(command) {
+                owner.commands.push(command);
+                return command.source === 'clear'
+                    ? pending
+                    : { type: 'refused' };
+            },
+        };
+        await f.render(
+            h(
+                'div',
+                null,
+                h(PortalVisitorSearch, { port }),
+                h('button', { id: 'neighbor' }, 'Next')
+            )
+        );
+        const input = f.container.querySelector('input');
+        const clear = [...f.container.querySelectorAll('button')].find(
+            (button) => button.textContent === 'Clear search'
+        );
+        const neighbor = [...f.container.querySelectorAll('button')].find(
+            (button) => button.id === 'neighbor'
+        );
+        assert.ok(input && clear && neighbor);
+        await f.click(clear);
+        assert.equal(input.value, '');
+
+        let expected = '';
+        if (interaction === 'typing') {
+            const edit = async (value: string) => {
+                await act(async () => {
+                    Object.getOwnPropertyDescriptor(
+                        f.window.HTMLInputElement.prototype,
+                        'value'
+                    )?.set?.call(input, value);
+                    input.dispatchEvent(
+                        new f.window.Event('input', { bubbles: true })
+                    );
+                });
+            };
+            await edit('new draft');
+            assert.equal(input.value, 'new draft');
+            await edit('');
+        } else if (interaction === 'submit') {
+            const submit = [...f.container.querySelectorAll('button')].find(
+                (button) => button.textContent === 'Search'
+            );
+            assert.ok(submit);
+            await f.click(submit);
+        } else {
+            expected = 'replacement view term';
+            await act(async () => {
+                owner.select('replacement');
+                owner.commit(expected);
+            });
+        }
+        await act(async () => {
+            neighbor.focus();
+            refuse({ type: 'refused' });
+        });
+        assert.equal(input.value, expected);
+        assert.equal(f.window.document.activeElement, neighbor);
+        assert.deepEqual(
+            owner.commands.map(({ source, searchTerm }) => [
+                source,
+                searchTerm,
+            ]),
+            interaction === 'submit'
+                ? [
+                      ['clear', ''],
+                      ['submit', ''],
+                  ]
+                : [['clear', '']]
+        );
+    });
+}
+
 for (const type of ['refused', 'uncertain'] as const) {
     it(`delivers ${type} after this subscription commits a changed term`, async (t) => {
         const f = await htmlPresentationFixture(t);

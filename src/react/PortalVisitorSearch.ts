@@ -48,6 +48,7 @@ type Entry = {
     subscription: symbol;
     draft: ReturnType<typeof capturePortalVisitorSearchDraft>;
     text: string;
+    pendingClear: PortalVisitorSearchIntent | null;
     reconcile(
         frame: ReturnType<typeof readPortalVisitorSearchFrame>
     ): Entry | null;
@@ -87,6 +88,7 @@ export function PortalVisitorSearch({
                       subscription,
                       draft: capturePortalVisitorSearchDraft(port, frame),
                       text: frame.searchTerm,
+                      pendingClear: null,
                       reconcile,
                   }
                 : null;
@@ -115,6 +117,7 @@ export function PortalVisitorSearch({
         candidate.reconcile(readPortalVisitorSearchFrame(candidate.port)) ===
             candidate;
     const edit = (candidate: Entry, text: string) => {
+        candidate.pendingClear = null;
         candidate.text = text;
         setVisible({ entry: candidate, text });
     };
@@ -123,7 +126,16 @@ export function PortalVisitorSearch({
         intent: PortalVisitorSearchIntent,
         onAdmitted?: () => void
     ) => {
-        void candidate.draft.submit(intent, onAdmitted).then((outcome) => {
+        const submission = candidate.draft.submit(intent, () => {
+            candidate.pendingClear = null;
+            if (intent.source === 'clear') {
+                edit(candidate, '');
+                candidate.pendingClear = intent;
+                input.current?.focus();
+            }
+            onAdmitted?.();
+        });
+        void submission.then((outcome) => {
             const live = current.current;
             if (!live || live.subscription !== candidate.subscription) return;
             const frame = readPortalVisitorSearchFrame(candidate.port);
@@ -140,8 +152,14 @@ export function PortalVisitorSearch({
                     ? outcome
                     : undefined;
             if (!publication && !advancedAllocation) {
-                if (verified === candidate)
+                if (verified === candidate) {
+                    if (candidate.pendingClear === intent) {
+                        candidate.pendingClear = null;
+                        if (outcome.type === 'refused')
+                            edit(candidate, frame.searchTerm);
+                    }
                     settings.current.onOutcome?.(outcome);
+                }
                 return;
             }
             const requestedTerm =
@@ -200,10 +218,7 @@ export function PortalVisitorSearch({
                       disabled: inactive,
                       onClick() {
                           if (!owns(entry)) return;
-                          submit(entry, { source: 'clear' }, () => {
-                              edit(entry, '');
-                              input.current?.focus();
-                          });
+                          submit(entry, { source: 'clear' });
                       },
                   },
                   names.clear
